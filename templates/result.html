@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Error</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 2rem; background: #f8f9fa; }
+    .error-box { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 2rem; max-width: 600px; margin: 0 auto; }
+    h1 { color: #e53e3e; margin-top: 0; }
+    a { color: #3182ce; }
+  </style>
+</head>
+<body>
+  <div class="error-box">
+    <h1>Something went wrong</h1>
+    <p>{{ error }}</p>
+    <p><a href="{{ url_for('main_bp.index') }}">&larr; Back to home</a></p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Plot groups vs control</title>
+    <style>
+        .group-source-well {
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            color: #1f2937;
+            border-radius: 7px;
+            padding: 5px 8px;
+            margin: 2px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+        .group-source-well.well-picked {
+            background: #dbeafe;
+            border-color: #2563eb;
+            color: #1d4ed8;
+            font-weight: 700;
+        }
+        .group-source-well.well-no-group {
+            background: #f8fafc;
+            color: #9ca3af;
+            border-style: dashed;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <h1>Plot groups individually against control samples</h1>
+    <p>Files merged: {{ n_files }} &nbsp;|&nbsp; Chromatic: {{ chromatic }} &nbsp;|&nbsp; Time unit: {{ time_unit_suffix }}</p>
+
+    <form action="{{ url_for('plots_bp.group_vs_control_render') }}" method="post">
+        <input type="hidden" name="dataset_id" value="{{ dataset_id }}">
+        <input type="hidden" id="group-order-input" name="group_order" value="">
+
+        {# ── Control wells ── #}
+        <details open style="margin-bottom:12px;">
+            <summary style="cursor:pointer; display:inline-block; border:1px solid #cbd5e1; border-radius:8px; padding:6px 10px; background:#f8fafc; font-weight:600;">
+                1. Select control wells
+            </summary>
+            <p style="font-size:0.85rem; color:#6b7280; margin:6px 0 4px;">Wells shown in <span style="color:#5b21b6; font-weight:600;">purple</span> already belong to a group.</p>
+            <div class="well-grid">
+                {% set grouped_wells = [] %}
+                {% for gname, gwells in groups.items() %}
+                    {% for w in gwells %}{% if grouped_wells.append(w) %}{% endif %}{% endfor %}
+                {% endfor %}
+                {% for well in all_wells %}
+                <label class="well-label {% if well in grouped_wells %}in-group{% endif %}">
+                    <input type="checkbox" name="control_well" value="{{ well }}"> {{ well }}
+                </label>
+                {% endfor %}
+            </div>
+        </details>
+
+        {# ── Groups ── #}
+        <details open style="margin-bottom:12px;">
+            <summary style="cursor:pointer; display:inline-block; border:1px solid #cbd5e1; border-radius:8px; padding:6px 10px; background:#f8fafc; font-weight:600;">
+                2. Choose groups by clicking wells
+            </summary>
+            <p style="font-size:0.85rem; color:#6b7280; margin:6px 0 8px;">Click wells that belong to the groups you want to compare against controls. Group checkboxes update automatically; arrows set output order.</p>
+            {% set grouped_wells_step2 = [] %}
+            {% for gname, gwells in groups.items() %}
+                {% for w in gwells %}{% if grouped_wells_step2.append(w) %}{% endif %}{% endfor %}
+            {% endfor %}
+            <div id="group-well-picker" class="well-grid" style="margin-bottom:10px;">
+                {% for well in all_wells %}
+                {% set has_group = well in grouped_wells_step2 %}
+                <button type="button"
+                        class="group-source-well {% if not has_group %}well-no-group{% endif %}"
+                        data-well="{{ well }}"
+                        {% if not has_group %}disabled{% endif %}
+                        title="{% if has_group %}Click to include this well's group{% else %}No group assigned{% endif %}">
+                    {{ well }}
+                </button>
+                {% endfor %}
+            </div>
+            <div id="group-list">
+                {% for gname, gwells in groups.items() %}
+                <div class="group-row" data-group="{{ gname }}">
+                    <input type="checkbox" class="group-include-cb" checked>
+                    <strong style="min-width:120px;">{{ gname }}</strong>
+                    <span style="font-size:0.8rem; color:#6b7280;">{{ gwells | join(', ') }}</span>
+                    <button type="button" class="move-btn" data-dir="up">▲</button>
+                    <button type="button" class="move-btn" data-dir="down">▼</button>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+
+        {# ── Exclusions + options ── #}
+        <details open style="margin-bottom:12px;">
+            <summary style="cursor:pointer; display:inline-block; border:1px solid #cbd5e1; border-radius:8px; padding:6px 10px; background:#f8fafc; font-weight:600;">
+                3. Exclude curves + options
+            </summary>
+            <p style="font-size:0.84rem; color:#6b7280; margin:6px 0 8px;">Uncheck wells you want to exclude before generating plots.</p>
+            <div id="exclude-wells-wrap" style="border:1px solid #e2e8f0; border-radius:8px; padding:8px; background:#fff; margin-bottom:10px;">
+                <div style="font-size:0.82rem; color:#64748b;">No grouped wells selected yet.</div>
+            </div>
+            <div style="display:flex; gap:16px; margin-top:8px; font-size:0.9rem;">
+                <label style="display:inline-flex; align-items:center; gap:6px;">
+                    <input type="radio" name="norm_setting" value="raw" checked> Raw (fluorescence a.u.)
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px;">
+                    <input type="radio" name="norm_setting" value="normalized"> Normalized (0–1)
+                </label>
+                <label style="display:inline-flex; align-items:center; gap:6px;">
+                    <input type="radio" name="norm_setting" value="both"> Both
+                </label>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                <input type="text" name="custom_x_label" placeholder="x-axis title">
+                <input type="text" name="custom_y_label" placeholder="y-axis title">
+                <input type="text" name="custom_plot_title" placeholder="plot headline">
+            </div>
+        </details>
+
+        <button type="submit" style="background:#7c3aed; margin-top:4px;">Generate plots</button>
+    </form>
+
+    <p style="margin-top:16px;"><a href="/">Back</a></p>
+
+    <script>
+        const groupOrderInput = document.getElementById("group-order-input");
+        const groupList = document.getElementById("group-list");
+        const excludeWrap = document.getElementById("exclude-wells-wrap");
+        const groupWellPicker = document.getElementById("group-well-picker");
+        const selectedGroupWells = new Set();
+        const GROUPS = {{ groups | tojson }};
+        const WELL_TO_GROUP = {};
+        Object.entries(GROUPS).forEach(([g, ws]) => (ws || []).forEach(w => { WELL_TO_GROUP[w] = g; }));
+
+        function updateGroupOrder() {
+            const rows = Array.from(groupList.querySelectorAll(".group-row"));
+            const order = rows
+                .filter(r => r.querySelector(".group-include-cb").checked)
+                .map(r => r.dataset.group);
+            groupOrderInput.value = JSON.stringify(order);
+            renderExcludeWells();
+        }
+
+        function renderExcludeWells() {
+            if (!excludeWrap) return;
+            const includedGroups = new Set(
+                Array.from(groupList.querySelectorAll(".group-row"))
+                    .filter(r => r.querySelector(".group-include-cb").checked)
+                    .map(r => r.dataset.group)
+            );
+            const wells = [];
+            Object.entries(GROUPS).forEach(([g, ws]) => {
+                if (!includedGroups.has(g)) return;
+                (ws || []).forEach(w => wells.push({ group: g, well: w }));
+            });
+            if (!wells.length) {
+                excludeWrap.innerHTML = '<div style="font-size:0.82rem; color:#64748b;">No grouped wells selected yet.</div>';
+                return;
+            }
+            excludeWrap.innerHTML = wells.map(({ group, well }) => `
+                <label style="display:inline-flex; align-items:center; gap:6px; margin:2px 8px 2px 0; font-size:0.84rem;">
+                    <input type="checkbox" name="exclude_well" value="${well}">
+                    Exclude ${well} (${group})
+                </label>
+            `).join("");
+        }
+
+        function applyWellDrivenGroupSelection() {
+            const groupsFromWells = new Set(Array.from(selectedGroupWells).map(w => WELL_TO_GROUP[w]).filter(Boolean));
+            Array.from(groupList.querySelectorAll(".group-row")).forEach(row => {
+                row.querySelector(".group-include-cb").checked = groupsFromWells.size ? groupsFromWells.has(row.dataset.group) : true;
+            });
+            updateGroupOrder();
+        }
+
+        groupList.addEventListener("click", function(e) {
+            const btn = e.target.closest(".move-btn");
+            if (!btn) return;
+            const row = btn.closest(".group-row");
+            const dir = btn.dataset.dir;
+            if (dir === "up" && row.previousElementSibling) {
+                groupList.insertBefore(row, row.previousElementSibling);
+            } else if (dir === "down" && row.nextElementSibling) {
+                groupList.insertBefore(row.nextElementSibling, row);
+            }
+            updateGroupOrder();
+        });
+
+        groupList.addEventListener("change", updateGroupOrder);
+
+        if (groupWellPicker) {
+            groupWellPicker.addEventListener("click", function (e) {
+                const btn = e.target.closest(".group-source-well[data-well]");
+                if (!btn || btn.disabled) return;
+                const well = btn.dataset.well;
+                if (selectedGroupWells.has(well)) {
+                    selectedGroupWells.delete(well);
+                    btn.classList.remove("well-picked");
+                } else {
+                    selectedGroupWells.add(well);
+                    btn.classList.add("well-picked");
+                }
+                applyWellDrivenGroupSelection();
+            });
+        }
+
+        // Initialise
+        updateGroupOrder();
+        renderExcludeWells();
+    </script>
+</body>
+</html>

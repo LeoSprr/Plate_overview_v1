@@ -1,0 +1,451 @@
+<style>
+        /* ── Chromatic selection modal ─────────────────────────────── */
+        .chrom-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 4000;
+            background: rgba(15,23,42,0.6);
+            align-items: flex-start;
+            justify-content: center;
+            padding: 20px 10px;
+            overflow-y: auto;
+        }
+        .chrom-modal.show { display: flex; }
+        .chrom-card {
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+            width: min(1200px, 98vw);
+            padding: 18px 20px 20px;
+        }
+        .chrom-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .chrom-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 10px;
+            padding: 8px 10px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.82rem;
+        }
+        .chrom-legend-item {
+            display: flex;
+            width: 100%;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .chrom-legend-item:last-child {
+            border-bottom: none;
+        }
+        .chrom-legend-left {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+        .chrom-legend-right {
+            color: #64748b;
+            font-size: 0.78rem;
+            white-space: nowrap;
+        }
+        .chrom-swatch {
+            width: 22px;
+            height: 4px;
+            border-radius: 2px;
+            display: inline-block;
+        }
+        .chrom-select-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+</style>
+
+
+    <!-- ── Chromatic selection modal ──────────────────────────────────────── -->
+    <div id="chrom-modal" class="chrom-modal" aria-hidden="true">
+      <div class="chrom-card">
+        <div class="chrom-head">
+          <h2 style="margin:0;font-size:1.2rem;">Choose chromatic</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="chrom-info" style="font-size:0.82rem;color:#64748b;"></span>
+            <button type="button" id="close-chrom-btn" style="background:#475569;">Cancel</button>
+          </div>
+        </div>
+        <div id="chrom-content">
+          <div class="po-loading">Loading chromatic data…</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    // ── Chromatic selection modal ─────────────────────────────────────────────
+    (function() {
+        const chromModal = document.getElementById("chrom-modal");
+        const chromContent = document.getElementById("chrom-content");
+        const chromInfo = document.getElementById("chrom-info");
+        const closeChromBtn = document.getElementById("close-chrom-btn");
+        const openSessionChromOverviewBtn = document.getElementById("session-chromatic-overview-btn");
+        const keepOnlyChromField = document.getElementById("keep-only-chromatic");
+
+        const CHROM_COLORS = {
+            "1": "#3B82F6", "2": "#F59E0B", "3": "#10B981",
+            "4": "#EF4444", "5": "#8B5CF6", "6": "#EC4899"
+        };
+        function chromColor(id) {
+            return CHROM_COLORS[String(id)] || "#94a3b8";
+        }
+
+        let chromData = null;
+        let pendingFormAction = null;
+        let pendingFormMethod = null;
+        let pendingSessionUploadSetId = "";
+
+        function buildChromMiniSvg(xArr, yArr, color, yMinOverride = null, yMaxOverride = null) {
+            if (!xArr || !xArr.length) return '<svg viewBox="0 0 76 44" width="100%" height="100%"></svg>';
+            const W = 76, H = 44, pad = 2;
+            const xMin = xArr[0], xMax = xArr[xArr.length - 1];
+            const xRng = xMax - xMin || 1;
+            const yMin = Number.isFinite(yMinOverride) ? Number(yMinOverride) : Math.min(...yArr);
+            const yMax = Number.isFinite(yMaxOverride) ? Number(yMaxOverride) : Math.max(...yArr);
+            const yRng = yMax - yMin || 1;
+            function px(x) { return pad + (x - xMin) / xRng * (W - 2 * pad); }
+            function py(y) { return H - pad - (y - yMin) / yRng * (H - 2 * pad); }
+            const pts = xArr.map((x, i) => `${px(x).toFixed(1)},${py(yArr[i]).toFixed(1)}`).join(" ");
+            return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
+        }
+
+        function renderChromModal(data) {
+            chromData = data;
+            const available = data.available || [];
+            const autoSel = data.auto_selected;
+
+            if (chromInfo) {
+                chromInfo.textContent = `${available.length} chromatic(s) found`;
+            }
+
+            let html = `<div class="chrom-legend">`;
+            available.forEach(cid => {
+                const color = chromColor(cid);
+                const chromMeta = (data.chromatics[cid] || {});
+                const nWells = Number(chromMeta.n_total_wells ?? chromMeta.n_wells ?? 0);
+                const nSaturated = Number(chromMeta.n_saturated_wells ?? 0);
+                html += `<div class="chrom-legend-item">
+                    <label class="chrom-legend-left">
+                        <input type="radio" name="chrom-pick" value="${cid}" ${cid === autoSel ? "checked" : ""}>
+                        <span class="chrom-swatch" style="background:${color};"></span>
+                        Chromatic ${cid} (${nWells} wells)${cid === autoSel ? " ★ auto" : ""}
+                    </label>
+                    <span class="chrom-legend-right">${nSaturated}/${nWells} saturated</span>
+                </div>`;
+            });
+            html += `</div>`;
+
+            // Plate grid preview (8x12)
+            const ROWS = ["A","B","C","D","E","F","G","H"];
+            const COLS = 12;
+            const allWells = new Set();
+            available.forEach(cid => {
+                Object.keys((data.chromatics[cid] || {}).wells || {}).forEach(w => allWells.add(w));
+            });
+
+            html += `<div class="po-grid-wrap"><table class="po-grid-table"><colgroup><col style="width:16px">`;
+            for (let c = 0; c < COLS; c++) html += `<col>`;
+            html += `</colgroup><thead><tr><th></th>`;
+            for (let c = 0; c < COLS; c++) {
+                html += `<th class="po-header-cell">${String(c+1).padStart(2,"0")}</th>`;
+            }
+            html += `</tr></thead><tbody>`;
+            for (let r = 0; r < ROWS.length; r++) {
+                html += `<tr><td class="po-row-label">${ROWS[r]}</td>`;
+                for (let c = 0; c < COLS; c++) {
+                    const well = ROWS[r] + String(c+1).padStart(2,"0");
+                    const hasAny = allWells.has(well);
+                    // data-chrom-well used to find the td for SVG injection
+                    html += `<td class="po-cell${hasAny ? "" : " po-no-data"}" data-chrom-well="${well}"></td>`;
+                }
+                html += `</tr>`;
+            }
+            html += `</tbody></table></div>`;
+
+            html += `<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                <label style="font-size:0.82rem;color:#334155;display:inline-flex;align-items:center;gap:6px;">
+                    <input type="checkbox" id="chrom-normalized-cb"> Normalized previews
+                </label>
+                <button type="button" id="chrom-proceed-btn" style="background:#0f766e;">Proceed with selected chromatic</button>
+                <span style="font-size:0.82rem;color:#64748b;">Select chromatic via radio button above, then click Proceed.</span>
+            </div>`;
+
+            chromContent.innerHTML = html;
+
+            function computeGlobalRawYRange() {
+                let yMin = Number.POSITIVE_INFINITY;
+                let yMax = Number.NEGATIVE_INFINITY;
+                available.forEach(cid => {
+                    const wellsObj = (data.chromatics[cid] || {}).wells || {};
+                    Object.values(wellsObj).forEach(series => {
+                        const ys = Array.isArray(series?.y) ? series.y : [];
+                        ys.forEach(v => {
+                            const num = Number(v);
+                            if (!Number.isFinite(num)) return;
+                            if (num < yMin) yMin = num;
+                            if (num > yMax) yMax = num;
+                        });
+                    });
+                });
+                if (!Number.isFinite(yMin) || !Number.isFinite(yMax) || yMin === yMax) {
+                    return { yMin: 0, yMax: 1 };
+                }
+                return { yMin, yMax };
+            }
+            const rawYRange = computeGlobalRawYRange();
+
+            function renderChromSvgs(normalizedView) {
+                allWells.forEach(well => {
+                    const td = chromContent.querySelector(`td[data-chrom-well="${well}"]`);
+                    if (!td) return;
+                    td.innerHTML = "";
+                    available.forEach(cid => {
+                        const wdata = (data.chromatics[cid] || {}).wells || {};
+                        if (!wdata[well]) return;
+                        const div = document.createElement("div");
+                        div.style.cssText = "position:absolute;inset:0;opacity:0.85;";
+                        div.setAttribute("data-chrom-svg", cid);
+                        const yValsRaw = (wdata[well].y || []).map(v => Number(v));
+                        let yVals = yValsRaw;
+                        let yMinForSvg = rawYRange.yMin;
+                        let yMaxForSvg = rawYRange.yMax;
+                        if (normalizedView && yValsRaw.length) {
+                            const mn = Math.min(...yValsRaw);
+                            const mx = Math.max(...yValsRaw);
+                            const rr = (mx - mn) || 1;
+                            yVals = yValsRaw.map(v => (v - mn) / rr);
+                            yMinForSvg = 0;
+                            yMaxForSvg = 1;
+                        }
+                        div.innerHTML = buildChromMiniSvg(wdata[well].x, yVals, chromColor(cid), yMinForSvg, yMaxForSvg);
+                        td.appendChild(div);
+                    });
+                });
+            }
+            renderChromSvgs(false);
+
+            // All chromatics stay visible; selected one gets full opacity, others slightly dimmed
+            function updateChromHighlight() {
+                const picked = document.querySelector('input[name="chrom-pick"]:checked');
+                if (!picked) return;
+                const pickedId = picked.value;
+                allWells.forEach(well => {
+                    available.forEach(cid => {
+                        const svgDiv = chromContent.querySelector(`td[data-chrom-well="${well}"] [data-chrom-svg="${cid}"]`);
+                        if (svgDiv) {
+                            svgDiv.style.opacity = (cid === pickedId) ? "1" : "0.6";
+                        }
+                    });
+                });
+            }
+            document.querySelectorAll('input[name="chrom-pick"]').forEach(rb => {
+                rb.addEventListener("change", updateChromHighlight);
+            });
+            const chromNormCb = document.getElementById("chrom-normalized-cb");
+            if (chromNormCb) {
+                chromNormCb.checked = false;
+                chromNormCb.addEventListener("change", function() {
+                    renderChromSvgs(this.checked);
+                    updateChromHighlight();
+                });
+            }
+            updateChromHighlight();
+
+            // Proceed button
+            const proceedBtn = document.getElementById("chrom-proceed-btn");
+            if (proceedBtn) {
+                proceedBtn.addEventListener("click", function() {
+                    const picked = document.querySelector('input[name="chrom-pick"]:checked');
+                    const pickedId = picked ? picked.value : (autoSel || "");
+                    // Set hidden field and submit
+                    const forcedField = document.getElementById("forced-chromatic");
+                    if (forcedField) forcedField.value = pickedId;
+                    if (keepOnlyChromField) {
+                        keepOnlyChromField.value = (pendingFormAction === "/upload/save_only") ? "1" : "";
+                    }
+                    chromModal.classList.remove("show");
+                    chromModal.setAttribute("aria-hidden", "true");
+                    // Session chromatic overview flow: apply directly for current upload set.
+                    if (pendingSessionUploadSetId) {
+                        const form = document.createElement("form");
+                        form.method = "post";
+                        form.action = "/files/set_chromatic";
+                        const add = function(name, value) {
+                            const inp = document.createElement("input");
+                            inp.type = "hidden";
+                            inp.name = name;
+                            inp.value = value;
+                            form.appendChild(inp);
+                        };
+                        add("upload_set_id", pendingSessionUploadSetId);
+                        add("chromatic", pickedId);
+                        document.body.appendChild(form);
+                        form.submit();
+                        document.body.removeChild(form);
+                        return;
+                    }
+                    // Upload flow: submit main form with pending action.
+                    const mainForm = document.querySelector('form[action="/analyze"]');
+                    if (mainForm && pendingFormAction) {
+                        // Use a temporary submit button with formaction.
+                        // data-skip-intercept prevents the form click listener from
+                        // re-intercepting this button and re-opening the modal.
+                        const btn = document.createElement("button");
+                        btn.type = "submit";
+                        btn.style.display = "none";
+                        btn.setAttribute("data-skip-intercept", "1");
+                        if (pendingFormAction !== "/analyze") {
+                            btn.setAttribute("formaction", pendingFormAction);
+                        }
+                        if (pendingFormMethod && pendingFormMethod !== "post") {
+                            btn.setAttribute("formmethod", pendingFormMethod);
+                        }
+                        mainForm.appendChild(btn);
+                        btn.click();
+                        setTimeout(() => { if (btn.parentNode) btn.parentNode.removeChild(btn); }, 300);
+                    }
+                });
+            }
+        }
+
+        // Intercept submit buttons that need files and multiple chromatics
+        function shouldShowChromModal() {
+            const fileInputsEl = document.getElementById("file-inputs");
+            if (!fileInputsEl) return false;
+            const hasNewFiles = Array.from(fileInputsEl.querySelectorAll("input[type=file]"))
+                .some(inp => inp.files && inp.files.length > 0);
+            return hasNewFiles;
+        }
+
+        async function maybeShowChromModal(formAction, formMethod, evt) {
+            if (!shouldShowChromModal()) return false;
+            // We need to check if there are multiple chromatics
+            const mainForm = document.querySelector('form[action="/analyze"]');
+            if (!mainForm) return false;
+            const fd = new FormData(mainForm);
+            try {
+                const resp = await fetch("/upload/preview_chromatics", { method: "POST", body: fd });
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) return false;
+                if (!data.available || data.available.length <= 1) return false;
+                // Multiple chromatics → show modal
+                pendingFormAction = formAction;
+                pendingFormMethod = formMethod;
+                if (chromContent) chromContent.innerHTML = '<div class="po-loading">Loading chromatic data…</div>';
+                chromModal.classList.add("show");
+                chromModal.setAttribute("aria-hidden", "false");
+                renderChromModal(data);
+                return true;
+            } catch(_) {
+                return false;
+            }
+        }
+
+        // Intercept all submit buttons in the analyze form.
+        // IMPORTANT: preventDefault must be called synchronously before any await,
+        // so we always preventDefault first, then re-submit manually if no modal needed.
+        const mainForm = document.querySelector('form[action="/analyze"]');
+        if (mainForm) {
+            mainForm.addEventListener("click", async function(evt) {
+                const btn = evt.target.closest("button[type=submit]");
+                if (!btn) return;
+                if (keepOnlyChromField) keepOnlyChromField.value = "";
+                pendingSessionUploadSetId = "";
+                // Buttons tagged with data-skip-intercept bypass the modal check
+                // (used when we programmatically re-submit after deciding no modal needed).
+                if (btn.hasAttribute("data-skip-intercept")) return;
+                evt.preventDefault(); // Must be synchronous
+                const fa = btn.getAttribute("formaction") || "/analyze";
+                const fm = btn.getAttribute("formmethod") || "post";
+                const intercepted = await maybeShowChromModal(fa, fm, evt);
+                if (!intercepted) {
+                    // No modal needed — re-submit with the correct formaction
+                    const tmp = document.createElement("button");
+                    tmp.type = "submit";
+                    tmp.setAttribute("data-skip-intercept", "1");
+                    tmp.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;";
+                    if (fa !== "/analyze") tmp.setAttribute("formaction", fa);
+                    if (fm !== "post") tmp.setAttribute("formmethod", fm);
+                    mainForm.appendChild(tmp);
+                    tmp.click();
+                    setTimeout(() => { if (tmp.parentNode) tmp.parentNode.removeChild(tmp); }, 300);
+                }
+            });
+        }
+
+        if (openSessionChromOverviewBtn) {
+            openSessionChromOverviewBtn.addEventListener("click", async function() {
+                const uploadSetId = String(openSessionChromOverviewBtn.dataset.uploadSetId || "").trim();
+                if (!uploadSetId) return;
+                pendingFormAction = null;
+                pendingFormMethod = null;
+                pendingSessionUploadSetId = uploadSetId;
+                if (keepOnlyChromField) keepOnlyChromField.value = "";
+
+                if (chromContent) chromContent.innerHTML = '<div class="po-loading">Loading chromatic data…</div>';
+                chromModal.classList.add("show");
+                chromModal.setAttribute("aria-hidden", "false");
+
+                try {
+                    const body = new URLSearchParams();
+                    body.set("upload_set_id", uploadSetId);
+                    const resp = await fetch("/upload/preview_chromatics_session", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+                        body: body.toString(),
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok || !data.ok) {
+                        if (chromContent) chromContent.innerHTML = `<div class="po-loading" style="color:#b91c1c;">Error: ${data.error || "Could not load chromatics."}</div>`;
+                        return;
+                    }
+                    renderChromModal(data);
+                } catch(_) {
+                    if (chromContent) chromContent.innerHTML = '<div class="po-loading" style="color:#b91c1c;">Network error.</div>';
+                }
+            });
+        }
+
+        if (closeChromBtn) {
+            closeChromBtn.addEventListener("click", function() {
+                chromModal.classList.remove("show");
+                chromModal.setAttribute("aria-hidden", "true");
+                pendingFormAction = null;
+                pendingFormMethod = null;
+                pendingSessionUploadSetId = "";
+            });
+        }
+        if (chromModal) {
+            chromModal.addEventListener("click", function(evt) {
+                if (evt.target === chromModal) {
+                    chromModal.classList.remove("show");
+                    chromModal.setAttribute("aria-hidden", "true");
+                    pendingFormAction = null;
+                    pendingFormMethod = null;
+                    pendingSessionUploadSetId = "";
+                }
+            });
+        }
+    })();
+    </script>

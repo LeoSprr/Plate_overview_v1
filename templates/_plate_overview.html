@@ -1,0 +1,2208 @@
+<style>
+        /* ── Plate overview modal ──────────────────────────────────── */
+        .plate-ov-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 3000;
+            background: rgba(15,23,42,0.55);
+            align-items: flex-start;
+            justify-content: center;
+            padding: 20px 10px;
+            overflow-y: auto;
+        }
+        .plate-ov-modal.show { display: flex; }
+        .plate-ov-card {
+            background: #fff;
+            border-radius: 14px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.28);
+            width: min(1600px, 99vw);
+            padding: 18px 20px 20px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        .plate-ov-body {
+            display: flex;
+            gap: 0;
+            flex: 1;
+            min-height: 0;
+            position: relative;
+        }
+        .plate-ov-main {
+            flex: 1;
+            min-width: 0;
+        }
+        .plate-ov-sidebar {
+            width: 230px;
+            flex: 0 0 230px;
+            border-left: 1px solid #e2e8f0;
+            background: #f8fafc;
+            border-radius: 0 0 10px 0;
+            padding: 10px 10px 10px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            overflow-y: auto;
+            transition: width 0.2s, padding 0.2s, flex-basis 0.2s;
+        }
+        .plate-ov-sidebar.collapsed {
+            width: 0;
+            flex-basis: 0;
+            padding-left: 0;
+            padding-right: 0;
+            overflow: hidden;
+        }
+        .plate-ov-sidebar-toggle {
+            position: absolute;
+            left: -14px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 48px;
+            background: #334155;
+            color: #fff;
+            border: none;
+            border-radius: 6px 0 0 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            z-index: 10;
+            padding: 0;
+            line-height: 1;
+        }
+        .plate-ov-sidebar-toggle:hover { background: #1e293b; }
+        .plate-ov-sidebar-title {
+            font-weight: 700;
+            font-size: 0.82rem;
+            color: #334155;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e2e8f0;
+            margin-bottom: 4px;
+        }
+        .po-sidebar-run {
+            padding: 5px 7px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            line-height: 1.25;
+        }
+        .po-sidebar-run:hover { background: #e2e8f0; }
+        .po-sidebar-run.active { background: #dbeafe; color: #1d4ed8; font-weight: 600; }
+        .po-sidebar-run-date { font-size: 0.72rem; color: #64748b; }
+        .plate-ov-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .plate-ov-options {
+            display: flex;
+            gap: 14px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+        }
+        .plate-ov-group-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 8px 10px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .plate-ov-action-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        /* Feature bar */
+        .po-feature-bar {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+            padding: 6px 8px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+        .po-feature-label { font-size: 0.75rem; font-weight: 700; color: #475569; white-space: nowrap; }
+        .po-feature-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+        .po-feature-tab {
+            font-size: 0.78rem;
+            padding: 3px 10px;
+            border-radius: 20px;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            color: #475569;
+            cursor: pointer;
+            transition: background 0.1s, color 0.1s;
+        }
+        .po-feature-tab:hover { background: #e2e8f0; }
+        .po-feature-tab.po-feature-active {
+            background: #1d4ed8;
+            color: #fff;
+            border-color: #1d4ed8;
+            font-weight: 700;
+        }
+        #po-add-feature-btn {
+            font-size: 0.78rem;
+            padding: 3px 10px;
+            border-radius: 20px;
+            background: #475569;
+            margin-left: 4px;
+        }
+        .po-add-feature-inline {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .po-add-feature-inline input {
+            font-size: 0.8rem;
+            padding: 3px 7px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            max-width: 150px;
+        }
+        /* Floating plot button + options panel */
+        #po-fab-wrap {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            right: 28px;
+            z-index: 4000;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+        }
+        #po-fab-wrap.visible { display: flex; }
+        #po-plot-fab-btn {
+            background: #0f766e;
+            font-size: 0.92rem;
+            font-weight: 700;
+            padding: 10px 18px;
+            border-radius: 24px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.22);
+            white-space: nowrap;
+        }
+        #po-plot-fab-btn:hover { background: #0d6460; }
+        #po-plot-opts-panel {
+            display: none;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 28px rgba(0,0,0,0.22);
+            padding: 16px 18px 14px;
+            min-width: 280px;
+            max-width: 340px;
+            border: 1px solid #e2e8f0;
+        }
+        #po-plot-opts-panel.visible { display: block; }
+        .po-opts-row {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            margin-bottom: 10px;
+        }
+        .po-opts-row label { font-size: 0.78rem; color: #475569; font-weight: 600; }
+        .po-opts-row input[type=text],
+        .po-opts-row input[type=number],
+        .po-opts-row select {
+            font-size: 0.82rem;
+            padding: 4px 7px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .po-opts-row-inline {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .po-opts-row-inline > * { flex: 1; }
+        .po-opts-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 12px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        #po-sel-hint {
+            font-size: 0.8rem;
+            color: #0f766e;
+            background: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 20px;
+            padding: 5px 12px;
+            font-weight: 600;
+        }
+        .po-cell {
+            /* width is set by table-layout:fixed — no fixed px here */
+            height: 62px;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            position: relative;
+            background: #fff;
+            vertical-align: top;
+            padding: 0;
+            user-select: none;
+            overflow: hidden;
+            transition: border-color 0.08s;
+        }
+        .po-cell:hover { border-color: #93c5fd; }
+        .po-cell.po-selected { border: 2px solid #2563eb; box-shadow: inset 0 0 0 1px #2563eb; }
+        .po-cell.po-no-data { background: #f8fafc; cursor: default; }
+        .po-cell.po-no-data:hover { border-color: #e2e8f0; }
+        /* SVG fills the entire cell */
+        .po-cell svg { position:absolute; inset:0; width:100%; height:100%; display:block; }
+        /* Overlay labels — hidden by default, revealed by settings classes on the table */
+        .po-cell-label {
+            display: none;
+            position: absolute;
+            bottom: 2px; left: 3px;
+            font-size: 0.52rem; font-weight: 600;
+            color: rgba(30,30,30,0.65);
+            pointer-events: none;
+            line-height: 1;
+        }
+        /* Activated by settings toggles */
+        .po-cell-group {
+            display: none;
+            position: absolute;
+            bottom: 2px; left: 3px;
+            font-size: 0.5rem; font-weight: 700;
+            color: rgba(15,23,42,0.75);
+            text-shadow: 0 0 3px rgba(255,255,255,0.7);
+            pointer-events: none;
+            line-height: 1;
+            max-width: 90%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .po-show-labels  .po-cell-label  { display: block; }
+        .po-show-group .po-cell-group { display: block; }
+        .po-header-cell { text-align:center; font-size:0.62rem; font-weight:700; color:#64748b; padding:1px 0; }
+        .po-row-label { font-size:0.65rem; font-weight:700; color:#64748b; padding:0 3px; vertical-align:middle; text-align:right; width:16px; white-space:nowrap; }
+        /* table fills container, fixed layout lets cells auto-split remaining width */
+        .po-grid-table { border-collapse:collapse; table-layout:fixed; width:100%; }
+        .po-grid-wrap { overflow-x:auto; }
+        .po-action-armed {
+            box-shadow: inset 0 0 0 2px #0f172a;
+        }
+        /* ── Plate overview file tabs ──────────────────────────────── */
+        #po-tab-bar {
+            display: flex;
+            align-items: flex-end;
+            gap: 0;
+            border-bottom: 2px solid #e2e8f0;
+            overflow-x: auto;
+            flex-wrap: nowrap;
+            scrollbar-width: none;
+        }
+        #po-tab-bar::-webkit-scrollbar { display: none; }
+        .po-file-tab {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 14px 6px 12px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #64748b;
+            background: #f1f5f9;
+            border: 2px solid #e2e8f0;
+            border-bottom: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            white-space: nowrap;
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-right: 2px;
+            user-select: none;
+            flex-shrink: 0;
+            transition: background 0.1s, color 0.1s;
+        }
+        .po-file-tab:hover { background: #e2e8f0; color: #334155; }
+        .po-file-tab.po-tab-active {
+            background: #fff;
+            color: #0f172a;
+            border-color: #cbd5e1;
+            border-bottom: 2px solid #fff;
+            margin-bottom: -2px;
+            z-index: 1;
+        }
+        .po-tab-close {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            font-size: 0.7rem;
+            line-height: 1;
+            color: #94a3b8;
+            background: transparent;
+            padding: 0;
+            flex-shrink: 0;
+            transition: background 0.1s, color 0.1s;
+        }
+        .po-tab-close:hover { background: #fecaca; color: #b91c1c; }
+        #po-add-tab-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            padding: 0;
+            font-size: 1.1rem;
+            font-weight: 400;
+            color: #64748b;
+            background: transparent;
+            border: 1.5px dashed #cbd5e1;
+            border-bottom: none;
+            border-radius: 6px 6px 0 0;
+            cursor: pointer;
+            flex-shrink: 0;
+            margin-left: 4px;
+            margin-bottom: 0;
+            transition: background 0.1s, color 0.1s;
+            align-self: flex-end;
+        }
+        #po-add-tab-btn:hover { background: #f1f5f9; color: #334155; }
+        /* Run picker popover */
+        #po-run-picker {
+            display: none;
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 0;
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.14);
+            z-index: 3100;
+            min-width: 260px;
+            max-width: 380px;
+            max-height: 340px;
+            overflow-y: auto;
+            padding: 0;
+        }
+        #po-run-picker.visible { display: block; }
+        .po-run-picker-header {
+            padding: 8px 14px 6px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #f1f5f9;
+            position: sticky;
+            top: 0;
+            background: #fff;
+        }
+        .po-run-picker-item {
+            padding: 8px 14px;
+            font-size: 0.82rem;
+            color: #1e293b;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+        }
+        .po-run-picker-item:hover { background: #f1f5f9; }
+        .po-run-picker-item-name { font-weight: 600; }
+        .po-run-picker-item-meta { font-size: 0.72rem; color: #64748b; }
+        .po-run-picker-empty { padding: 10px 14px; font-size: 0.82rem; color: #94a3b8; }
+        #po-tab-bar-wrap {
+            position: relative;
+            margin-bottom: 10px;
+        }
+        .po-template-preview-shell {
+            overflow-x: auto;
+            border: 1px solid #dbe2ea;
+            border-radius: 10px;
+            background: #ffffff;
+            padding: 0;
+        }
+        .po-template-preview-table {
+            border-collapse: collapse;
+            table-layout: fixed;
+            width: max-content;
+            min-width: 100%;
+            background: #fff;
+        }
+        .po-template-preview-table th {
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            color: #334155;
+            font-size: 0.74rem;
+            font-weight: 700;
+            padding: 6px 5px;
+            text-align: center;
+        }
+        .po-template-preview-table .po-template-preview-row {
+            width: 34px;
+            min-width: 34px;
+            max-width: 34px;
+        }
+        .po-template-preview-cell {
+            width: 116px;
+            min-width: 116px;
+            max-width: 116px;
+            height: 76px;
+            border: 1px solid #e2e8f0;
+            vertical-align: middle;
+            text-align: center;
+            padding: 4px 6px;
+            color: #0f172a;
+            font-size: 0.7rem;
+            font-weight: 700;
+            line-height: 1.1;
+            overflow-wrap: anywhere;
+        }
+        .po-template-preview-cell.po-template-no-data {
+            background: #f8fafc !important;
+            color: #94a3b8;
+        }
+        .po-template-preview-well {
+            display: block;
+            margin-top: 3px;
+            font-size: 0.6rem;
+            color: rgba(15, 23, 42, 0.78);
+            font-weight: 600;
+        }
+        .po-settings-bar { display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:8px; padding:6px 10px; background:#f1f5f9; border-radius:7px; font-size:0.82rem; }
+        .po-group-legend { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; min-height:20px; }
+        .po-group-badge { display:inline-flex; align-items:center; gap:4px; padding:2px 7px 2px 5px; border-radius:999px; font-size:0.75rem; border:1px solid #e2e8f0; background:#f8fafc; }
+        .po-group-dot { width:9px; height:9px; border-radius:999px; flex:0 0 9px; }
+        .po-group-trash { background:none; border:none; cursor:pointer; padding:0 0 0 3px; font-size:0.75rem; color:#9ca3af; line-height:1; }
+        .po-loading { text-align:center; padding:40px; font-size:1rem; color:#64748b; }
+        /* ── GvC wizard ──────────────────────────────────────────────────── */
+        .po-gvc-wizard {
+            display: none; padding: 10px 14px; background: #fdf4ff;
+            border: 2px solid #a855f7; border-radius: 10px; margin-bottom: 10px;
+            flex-direction: column; gap: 8px;
+        }
+        .po-gvc-wizard.active { display: flex; }
+        .po-gvc-step-bar { display: flex; margin-bottom: 2px; }
+        .po-gvc-step {
+            flex: 1; text-align: center; padding: 5px 4px; font-size: 0.75rem;
+            font-weight: 600; color: #64748b; background: #f1f5f9;
+            border: 1px solid #e2e8f0; border-right: none;
+        }
+        .po-gvc-step:first-child { border-radius: 7px 0 0 7px; }
+        .po-gvc-step:last-child  { border-radius: 0 7px 7px 0; border-right: 1px solid #e2e8f0; }
+        .po-gvc-step.gvc-active  { background: #a855f7; color: #fff; border-color: #a855f7; }
+        .po-gvc-step.gvc-done    { background: #ddd6fe; color: #581c87; border-color: #c084fc; }
+        .po-gvc-instr  { font-size: 0.83rem; color: #4a044e; }
+        .po-gvc-count  { font-size: 0.78rem; color: #7c3aed; font-weight: 600; }
+        .po-cell[data-gvc="control"] { box-shadow: inset 0 0 0 3px #ef4444 !important; }
+        .po-cell[data-gvc="group"]   { box-shadow: inset 0 0 0 3px #7c3aed !important; }
+        .po-cell[data-gvc="both"]    { box-shadow: inset 0 0 0 3px #f97316 !important; }
+        /* ── Halving detection banner ───────────────────────────────────── */
+        #po-halving-banner {
+            display: none;
+            background: #fef2f2;
+            border: 1.5px solid #ef4444;
+            color: #b91c1c;
+            border-radius: 8px;
+            padding: 6px 12px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        #po-halving-banner.show { display: flex; }
+        #po-halving-banner-close {
+            margin-left: auto;
+            background: none;
+            border: none;
+            color: #b91c1c;
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0 2px;
+            line-height: 1;
+        }
+        .po-cell-gvc-badge {
+            position: absolute; bottom: 2px; left: 3px;
+            font-size: 0.52rem; font-weight: 900;
+            pointer-events: none; line-height: 1; z-index: 2;
+            text-shadow: 0 0 2px #fff;
+        }
+</style>
+
+    <!-- ── Plate overview modal ──────────────────────────────────────────── -->
+    <div id="plate-ov-modal" class="plate-ov-modal" aria-hidden="true">
+      <div class="plate-ov-card">
+        <div class="plate-ov-head">
+          <h2 style="margin:0; font-size:1.2rem;">Plate overview</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="po-info-bar" style="font-size:0.82rem;color:#64748b;"></span>
+            <button type="button" id="close-plate-ov-btn" style="background:#475569;">Close</button>
+          </div>
+        </div>
+        <div class="plate-ov-body">
+          <div class="plate-ov-main">
+            <div id="po-tab-bar-wrap">
+              <div id="po-tab-bar"></div>
+              <div id="po-run-picker"></div>
+            </div>
+            <div id="po-halving-banner">
+              <span style="font-size:1rem;flex-shrink:0;">&#9888;</span>
+              <span id="po-halving-banner-text"></span>
+              <button type="button" id="po-halving-banner-close" title="Dismiss">&#x2715;</button>
+            </div>
+            <div id="po-content">
+              <div class="po-loading">Loading plate data…</div>
+            </div>
+          </div>
+          <div class="plate-ov-sidebar collapsed" id="po-sidebar" style="position:relative;">
+            <button type="button" class="plate-ov-sidebar-toggle" id="po-sidebar-toggle" title="Toggle saved files">◀</button>
+            <div class="plate-ov-sidebar-title">Saved files</div>
+            <div id="po-sidebar-run-list"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Plate overview floating plot button ───────────────────────────── -->
+    <div id="po-fab-wrap">
+        <div id="po-plot-opts-panel">
+            <div class="po-opts-title" id="po-opts-title">Aggregation curve options</div>
+            <!-- Aggregation options -->
+            <div id="po-opts-agg-section">
+                <div class="po-opts-row" style="flex-direction:row;align-items:center;gap:8px;margin-bottom:12px;">
+                    <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:0.82rem;color:#334155;cursor:pointer;">
+                        <input type="checkbox" id="po-opts-normalized"> Normalized curves
+                    </label>
+                </div>
+                <div class="po-opts-row-inline">
+                    <div class="po-opts-row" style="margin-bottom:0;">
+                        <label>X from</label>
+                        <input type="number" id="po-opts-xfrom" placeholder="auto" step="any">
+                    </div>
+                    <div class="po-opts-row" style="margin-bottom:0;">
+                        <label>X to</label>
+                        <input type="number" id="po-opts-xto" placeholder="auto" step="any">
+                    </div>
+                </div>
+            </div>
+            <!-- Shared title options -->
+            <div class="po-opts-row">
+                <label>Plot title</label>
+                <input type="text" id="po-opts-plot-title" placeholder="(auto)">
+            </div>
+            <div class="po-opts-row">
+                <label>X-axis title</label>
+                <input type="text" id="po-opts-x-title" placeholder="(auto)">
+            </div>
+            <div class="po-opts-row" style="margin-bottom:14px;">
+                <label>Y-axis title</label>
+                <input type="text" id="po-opts-y-title" placeholder="(auto)">
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;">
+                <button type="button" id="po-opts-cancel-btn" style="background:#475569;">Cancel</button>
+                <button type="button" id="po-opts-generate-btn" style="background:#0f766e;">Generate plot</button>
+            </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;">
+            <span id="po-sel-hint">Click wells to select them for plotting</span>
+            <button type="button" id="po-plot-fab-btn">Plot selected curves</button>
+        </div>
+    </div>
+
+    <script>
+    // ── Plate overview modal ──────────────────────────────────────────────────
+    (function() {
+        const poModal = document.getElementById("plate-ov-modal");
+        const poContent = document.getElementById("po-content");
+        const poInfoBar = document.getElementById("po-info-bar");
+        const closePoBtn = document.getElementById("close-plate-ov-btn");
+        const openPoBtn = document.getElementById("open-plate-overview-btn");
+        const poTabBar = document.getElementById("po-tab-bar");
+        const poRunPicker = document.getElementById("po-run-picker");
+
+        // Saved runs for the "add file" picker (injected from Jinja2)
+        const PO_SAVED_RUNS = {{ saved_runs | tojson }};
+
+        // Module-scoped state
+        let poData = null;
+        let poGroups = {};
+        let poSelection = new Set();
+        let poDrawMode = false;
+        let poDragging = false;
+        let poFeatures = {};        // {featureName: {groupName: [wells]}}
+        let poActiveFeature = "";   // "" = default unlabelled groups
+        let poGvcStep = 0;          // 0=off 1=controls 2=groups 3=options
+        let poGvcControlWells = new Set();
+        let poGvcSelectedGroups = [];  // group names in numbered order
+
+        // ── Multi-tab state ──────────────────────────────────────────────────
+        let poTabs = [];       // [{label, data, groups, features, activeFeature}]
+        let poActiveTabIdx = -1;
+
+        const PO_PALETTE = [
+            "#93c5fd","#f9a8d4","#86efac","#fcd34d","#a5b4fc",
+            "#67e8f9","#fdba74","#d8b4fe","#bef264","#fca5a5"
+        ];
+
+        function poGroupColor(idx) {
+            return PO_PALETTE[idx % PO_PALETTE.length];
+        }
+
+        function poRowLetter(rowIdx) {
+            let n = rowIdx + 1, out = "";
+            while (n > 0) {
+                const r = (n - 1) % 26;
+                out = String.fromCharCode(65 + r) + out;
+                n = Math.floor((n - 1) / 26);
+            }
+            return out;
+        }
+
+        function poWellId(rowIdx, colIdx) {
+            return poRowLetter(rowIdx) + String(colIdx + 1).padStart(2, "0");
+        }
+
+        function buildMiniSvg(xArr, yArr, tHalf, tHalfY, normalized, showHalftime, color, yMinGlobal, yMaxGlobal) {
+            if (!xArr || !xArr.length) return '<svg viewBox="0 0 76 44"></svg>';
+            let ys = yArr.slice();
+            let yMin, yMax;
+            if (normalized) {
+                const mn = Math.min(...ys), mx = Math.max(...ys);
+                const rng = mx - mn || 1;
+                ys = ys.map(v => (v - mn) / rng);
+                yMin = 0; yMax = 1;
+            } else if (Number.isFinite(yMinGlobal) && Number.isFinite(yMaxGlobal)) {
+                yMin = yMinGlobal; yMax = yMaxGlobal;
+            } else {
+                yMin = Math.min(...ys); yMax = Math.max(...ys);
+            }
+            const xMin = xArr[0], xMax = xArr[xArr.length - 1];
+            const xRng = xMax - xMin || 1;
+            const yRng = yMax - yMin || 1;
+            const W = 76, H = 44, pad = 2;
+            function px(x) { return pad + (x - xMin) / xRng * (W - 2 * pad); }
+            function py(y) { return H - pad - (y - yMin) / yRng * (H - 2 * pad); }
+            let pts = xArr.map((x, i) => `${px(x).toFixed(1)},${py(ys[i]).toFixed(1)}`).join(" ");
+            let dotSvg = "";
+            if (showHalftime && tHalf != null && tHalfY != null) {
+                let dotY = tHalfY;
+                if (normalized) {
+                    const mn = Math.min(...yArr), mx = Math.max(...yArr);
+                    const rng = mx - mn || 1;
+                    dotY = (tHalfY - mn) / rng;
+                }
+                const dotX = px(tHalf), dotYPx = py(dotY);
+                dotSvg = `<circle cx="${dotX.toFixed(1)}" cy="${dotYPx.toFixed(1)}" r="2.5" fill="#ef4444" />`;
+            }
+            return `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color || "#2563eb"}" stroke-width="1.2"/>${dotSvg}</svg>`;
+        }
+
+        function poGetGroupForWell(well) {
+            for (const [gname, wells] of Object.entries(poGroups)) {
+                if (Array.isArray(wells) && wells.includes(well)) return gname;
+            }
+            return null;
+        }
+
+        function poGroupIndex(gname) {
+            return Object.keys(poGroups).indexOf(gname);
+        }
+
+        function poGetPendingGroupColor() {
+            const nameInput = document.getElementById("po-group-name-input");
+            const gname = (nameInput ? nameInput.value || "" : "").trim();
+            if (gname) {
+                const idx = Object.keys(poGroups).indexOf(gname);
+                if (idx >= 0) return poGroupColor(idx);
+                return poGroupColor(Object.keys(poGroups).length);
+            }
+            return poGroupColor(Object.keys(poGroups).length);
+        }
+
+        function detectHalvingPattern() {
+            function extractNum(name) {
+                const m = String(name).match(/(\d+(?:\.\d+)?)/);
+                return m ? parseFloat(m[1]) : null;
+            }
+            const entries = Object.entries(poGroups || {})
+                .map(([name, wells]) => {
+                    const val = extractNum(name);
+                    if (val === null || !Array.isArray(wells) || !wells.length) return null;
+                    const rows = wells.map(w => w.charCodeAt(0) - 65);
+                    const cols = wells.map(w => parseInt(w.slice(1)) - 1);
+                    return { name, val, minRow: Math.min(...rows), maxRow: Math.max(...rows),
+                             minCol: Math.min(...cols), maxCol: Math.max(...cols) };
+                })
+                .filter(Boolean);
+            if (entries.length < 2) return null;
+            // Sort by value descending so higher concentration first
+            entries.sort((a, b) => b.val - a.val);
+            // Find a chain of consecutive halvings (ratio ~2) with adjacent positions
+            function isHalving(a, b) {
+                return Math.abs(a.val / b.val - 2) < 0.25;
+            }
+            // Try to build a chain: vertical (adjacent rows) or horizontal (adjacent cols)
+            for (let i = 0; i < entries.length; i++) {
+                let vChain = [entries[i]], hChain = [entries[i]];
+                for (let j = i + 1; j < entries.length; j++) {
+                    const last = vChain[vChain.length - 1];
+                    if (isHalving(last, entries[j]) && entries[j].minRow === last.maxRow + 1)
+                        vChain.push(entries[j]);
+                    const lastH = hChain[hChain.length - 1];
+                    if (isHalving(lastH, entries[j]) && entries[j].minCol === lastH.maxCol + 1)
+                        hChain.push(entries[j]);
+                }
+                if (vChain.length >= 2) {
+                    const names = vChain.map(e => e.name).join(' → ');
+                    return `Halving series detected (rows): ${names}`;
+                }
+                if (hChain.length >= 2) {
+                    const names = hChain.map(e => e.name).join(' → ');
+                    return `Halving series detected (columns): ${names}`;
+                }
+            }
+            return null;
+        }
+
+        let _halvingBannerDismissed = false;
+
+        function poRenderGroupLegend() {
+            const hasGroups = Object.keys(poGroups || {}).length > 0;
+            const gvcBtn = document.getElementById("po-act-gvc");
+            if (gvcBtn) gvcBtn.style.display = hasGroups ? "" : "none";
+            const showGroupLabel = document.getElementById("po-show-group-label");
+            if (showGroupLabel) showGroupLabel.style.display = hasGroups ? "" : "none";
+            // Halving detection banner
+            const banner = document.getElementById("po-halving-banner");
+            const bannerText = document.getElementById("po-halving-banner-text");
+            if (banner && bannerText) {
+                const msg = !_halvingBannerDismissed ? detectHalvingPattern() : null;
+                if (msg) {
+                    bannerText.textContent = msg;
+                    banner.classList.add("show");
+                } else {
+                    banner.classList.remove("show");
+                }
+            }
+        }
+
+        function poUpdateCellVisual(cell, well, normalizedCb, showHalfCb, globalYRange) {
+            if (!poData) return;
+            const preview = poData.curve_previews[well];
+            const gname = poGetGroupForWell(well);
+            const gidx = gname ? poGroupIndex(gname) : -1;
+            const cellColor = gidx >= 0 ? poGroupColor(gidx) : "#fff";
+            cell.style.background = cellColor;
+            // Remove any existing SVG, then insert fresh one
+            cell.querySelectorAll("svg").forEach(s => s.remove());
+            if (preview) {
+                const isNorm = normalizedCb ? normalizedCb.checked : false;
+                const svgHtml = buildMiniSvg(
+                    preview.x, preview.y,
+                    preview.t_half, preview.t_half_y,
+                    isNorm,
+                    showHalfCb ? showHalfCb.checked : false,
+                    "#2563eb",
+                    isNorm ? null : (globalYRange ? globalYRange.yMin : null),
+                    isNorm ? null : (globalYRange ? globalYRange.yMax : null)
+                );
+                cell.insertAdjacentHTML("afterbegin", svgHtml);
+            }
+            if (poSelection.has(well)) {
+                cell.classList.add("po-selected");
+            } else {
+                cell.classList.remove("po-selected");
+            }
+        }
+
+        // ── Tab management ───────────────────────────────────────────────────
+
+        function saveCurrentTabState() {
+            if (poActiveTabIdx < 0 || poActiveTabIdx >= poTabs.length) return;
+            const t = poTabs[poActiveTabIdx];
+            t.groups = JSON.parse(JSON.stringify(poGroups));
+            t.features = JSON.parse(JSON.stringify(poFeatures));
+            t.activeFeature = poActiveFeature;
+        }
+
+        function loadTabState(idx) {
+            if (idx < 0 || idx >= poTabs.length) return;
+            const t = poTabs[idx];
+            poData = t.data;
+            Object.keys(poGroups).forEach(k => delete poGroups[k]);
+            Object.assign(poGroups, JSON.parse(JSON.stringify(t.groups)));
+            poFeatures = JSON.parse(JSON.stringify(t.features));
+            poActiveFeature = t.activeFeature;
+            poSelection = new Set();
+            poDrawMode = false;
+            poGvcStep = 0; poGvcControlWells.clear(); poGvcSelectedGroups = [];
+        }
+
+        function renderTabBar() {
+            if (!poTabBar) return;
+            poTabBar.innerHTML = "";
+            poTabs.forEach((tab, idx) => {
+                const btn = document.createElement("button");
+                btn.type = "button";
+                btn.className = "po-file-tab" + (idx === poActiveTabIdx ? " po-tab-active" : "");
+                btn.title = tab.label;
+                const nameSpan = document.createElement("span");
+                nameSpan.textContent = tab.label;
+                nameSpan.style.cssText = "overflow:hidden;text-overflow:ellipsis;max-width:150px;display:inline-block;";
+                btn.appendChild(nameSpan);
+                // Close button — only shown when 2+ tabs open
+                if (poTabs.length > 1) {
+                    const closeBtn = document.createElement("button");
+                    closeBtn.type = "button";
+                    closeBtn.className = "po-tab-close";
+                    closeBtn.textContent = "×";
+                    closeBtn.title = "Close tab";
+                    closeBtn.addEventListener("click", function(e) {
+                        e.stopPropagation();
+                        closeTab(idx);
+                    });
+                    btn.appendChild(closeBtn);
+                }
+                btn.addEventListener("click", function() { switchTab(idx); });
+                poTabBar.appendChild(btn);
+            });
+            // "+" button to open a new tab from saved files
+            const addBtn = document.createElement("button");
+            addBtn.type = "button";
+            addBtn.id = "po-add-tab-btn";
+            addBtn.textContent = "+";
+            addBtn.title = "Open another saved file";
+            addBtn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                toggleRunPicker(addBtn);
+            });
+            poTabBar.appendChild(addBtn);
+        }
+
+        function switchTab(idx) {
+            if (idx === poActiveTabIdx) return;
+            saveCurrentTabState();
+            poActiveTabIdx = idx;
+            loadTabState(idx);
+            renderTabBar();
+            renderPlateOvContent(poContent, poTabs[idx].data);
+        }
+
+        function closeTab(idx) {
+            if (poTabs.length === 1) {
+                // Last tab: close the whole modal
+                closePoModal();
+                return;
+            }
+            poTabs.splice(idx, 1);
+            let newIdx = poActiveTabIdx;
+            if (newIdx >= poTabs.length) newIdx = poTabs.length - 1;
+            poActiveTabIdx = newIdx;
+            loadTabState(newIdx);
+            renderTabBar();
+            renderPlateOvContent(poContent, poTabs[newIdx].data);
+        }
+
+        function addTab(data, label) {
+            saveCurrentTabState();
+            poTabs.push({
+                label: label,
+                data: data,
+                groups: JSON.parse(JSON.stringify(data.groups || {})),
+                features: { "m0": {}, "seed conc": {} },
+                activeFeature: ""
+            });
+            poActiveTabIdx = poTabs.length - 1;
+            loadTabState(poActiveTabIdx);
+            renderTabBar();
+            renderPlateOvContent(poContent, data);
+        }
+
+        // ── Run picker ───────────────────────────────────────────────────────
+
+        let pickerVisible = false;
+
+        function toggleRunPicker(anchor) {
+            if (!poRunPicker) return;
+            if (pickerVisible) {
+                poRunPicker.classList.remove("visible");
+                pickerVisible = false;
+                return;
+            }
+            buildRunPicker();
+            poRunPicker.classList.add("visible");
+            pickerVisible = true;
+        }
+
+        function buildRunPicker() {
+            if (!poRunPicker) return;
+            poRunPicker.innerHTML = "";
+            const header = document.createElement("div");
+            header.className = "po-run-picker-header";
+            header.textContent = "Open in new tab";
+            poRunPicker.appendChild(header);
+            const alreadyLoaded = new Set(poTabs.map(t => t.runId).filter(Boolean));
+            const runs = PO_SAVED_RUNS.filter(r => !alreadyLoaded.has(r.id));
+            if (!runs.length) {
+                const empty = document.createElement("div");
+                empty.className = "po-run-picker-empty";
+                empty.textContent = "No other saved files available.";
+                poRunPicker.appendChild(empty);
+                return;
+            }
+            runs.forEach(run => {
+                const item = document.createElement("div");
+                item.className = "po-run-picker-item";
+                const name = document.createElement("div");
+                name.className = "po-run-picker-item-name";
+                name.textContent = run.run_name || run.id.slice(0, 8);
+                const meta = document.createElement("div");
+                meta.className = "po-run-picker-item-meta";
+                const files = Array.isArray(run.source_files) ? run.source_files.join(", ") : (run.source_files || "");
+                meta.textContent = files ? files.slice(0, 80) : run.created_at || "";
+                item.appendChild(name);
+                if (meta.textContent) item.appendChild(meta);
+                item.addEventListener("click", async function() {
+                    poRunPicker.classList.remove("visible");
+                    pickerVisible = false;
+                    await loadRunAsTab(run);
+                });
+                poRunPicker.appendChild(item);
+            });
+        }
+
+        async function loadRunAsTab(run) {
+            if (poContent) poContent.innerHTML = '<div class="po-loading">Loading…</div>';
+            try {
+                const fd = new FormData();
+                fd.append("upload_set_id", run.id);
+                const resp = await fetch("/plate_overview/data", { method: "POST", body: fd });
+                const data = await resp.json();
+                if (!resp.ok || !data.ok) {
+                    alert("Could not load run: " + (data.error || "unknown error"));
+                    renderPlateOvContent(poContent, poTabs[poActiveTabIdx].data);
+                    return;
+                }
+                const label = (run.run_name || run.id.slice(0, 8)).slice(0, 30);
+                const tab = {
+                    label: label,
+                    runId: run.id,
+                    data: data,
+                    groups: JSON.parse(JSON.stringify(data.groups || {})),
+                    features: { "m0": {}, "seed conc": {} },
+                    activeFeature: ""
+                };
+                saveCurrentTabState();
+                poTabs.push(tab);
+                poActiveTabIdx = poTabs.length - 1;
+                loadTabState(poActiveTabIdx);
+                renderTabBar();
+                renderPlateOvContent(poContent, data);
+            } catch(err) {
+                alert("Network error loading run.");
+                if (poTabs[poActiveTabIdx]) renderPlateOvContent(poContent, poTabs[poActiveTabIdx].data);
+            }
+        }
+
+        // Close picker when clicking outside
+        document.addEventListener("click", function(e) {
+            if (pickerVisible && poRunPicker && !poRunPicker.contains(e.target)) {
+                const addTabBtn = document.getElementById("po-add-tab-btn");
+                if (!addTabBtn || !addTabBtn.contains(e.target)) {
+                    poRunPicker.classList.remove("visible");
+                    pickerVisible = false;
+                }
+            }
+        });
+
+        function escapeHtml(s) {
+            const map = {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"};
+            return String(s).replace(/[&<>"']/g, c => map[c]);
+        }
+
+        function loadTemplatesFromStorage() {
+            try { return JSON.parse(localStorage.getItem("po_group_templates") || "[]"); } catch(_) { return []; }
+        }
+
+        function saveGroupsDictAsTemplate(name, groupsDict) {
+            const templates = loadTemplatesFromStorage();
+            const groups = Object.entries(groupsDict).map(([n, ws]) => ({
+                name: n, cells: Array.isArray(ws) ? ws.slice() : []
+            }));
+            const existing = templates.findIndex(t => t.name === name);
+            if (existing >= 0) {
+                if (!window.confirm(`Template '${name}' already exists. Overwrite?`)) return false;
+                templates[existing] = { id: templates[existing].id, name, groups };
+            } else {
+                templates.push({ id: Date.now(), name, groups });
+            }
+            localStorage.setItem("po_group_templates", JSON.stringify(templates));
+            return true;
+        }
+
+        function renderPlateOvContent(container, data) {
+            if (!data || !data.ok) {
+                container.innerHTML = `<div class="po-loading" style="color:#b91c1c;">Error: ${(data && data.error) || "Unknown error"}</div>`;
+                return;
+            }
+            poData = data;
+
+            // Build HTML
+            const ROWS = ["A","B","C","D","E","F","G","H"];
+            const COLS = 12;
+
+            let html = `
+                <!-- Const values bar — hidden until toggled -->
+                <div class="po-feature-bar" id="po-feature-bar" style="display:none;">
+                    <span class="po-feature-label">Const values:</span>
+                    <div class="po-feature-tabs" id="po-feature-tabs"></div>
+                    <button type="button" id="po-add-feature-btn">+ Add const value</button>
+                    <div class="po-add-feature-inline" id="po-add-feature-form" style="display:none;">
+                        <input type="text" id="po-new-feature-input" placeholder="feature name" style="max-width:150px;">
+                        <button type="button" id="po-new-feature-confirm" style="background:#1d4ed8;font-size:0.78rem;padding:3px 9px;">Create</button>
+                        <button type="button" id="po-new-feature-cancel" style="background:#475569;font-size:0.78rem;padding:3px 7px;">✕</button>
+                    </div>
+                </div>
+                <div class="plate-ov-group-controls">
+                    <button type="button" id="po-draw-mode-btn" style="background:#475569;">Grouping mode: OFF</button>
+                    <span id="po-group-color-swatch" style="display:inline-block;width:14px;height:14px;border-radius:3px;border:1px solid #cbd5e1;vertical-align:middle;margin-left:2px;"></span>
+                    <!-- Regular group name (shown on "group" tab) -->
+                    <input type="text" id="po-group-name-input" placeholder="group name" style="max-width:160px;">
+                    <!-- Const value input (shown on non-group tabs) -->
+                    <span id="po-const-value-wrap" style="display:none;align-items:center;gap:4px;">
+                        <input type="number" id="po-const-number-input" placeholder="value" step="any" style="max-width:90px;font-size:0.82rem;padding:4px 7px;border:1px solid #cbd5e1;border-radius:6px;">
+                        <label style="font-size:0.78rem;display:flex;align-items:center;gap:3px;cursor:pointer;">
+                            <input type="radio" name="po-unit-type" value="M" checked> M
+                        </label>
+                        <select id="po-m-prefix" style="font-size:0.78rem;padding:2px 5px;border:1px solid #cbd5e1;border-radius:5px;">
+                            <option value="T">T (tera)</option>
+                            <option value="G">G (giga)</option>
+                            <option value="M">M (mega)</option>
+                            <option value="k">k (kilo)</option>
+                            <option value="" selected>(none) — M</option>
+                            <option value="m">m (milli)</option>
+                            <option value="µ">µ (micro)</option>
+                            <option value="n">n (nano)</option>
+                            <option value="p">p (pico)</option>
+                            <option value="f">f (femto)</option>
+                            <option value="a">a (atto)</option>
+                        </select>
+                        <label style="font-size:0.78rem;display:flex;align-items:center;gap:3px;cursor:pointer;">
+                            <input type="radio" name="po-unit-type" value="%"> %
+                        </label>
+                    </span>
+                    <button type="button" id="po-assign-btn" style="background:#1d4ed8;">Assign</button>
+                    <button type="button" id="po-select-all-btn" style="background:#334155;">Select all</button>
+                    <button type="button" id="po-clear-sel-btn" style="background:#475569;">Clear selection</button>
+                    <button type="button" id="po-clear-groups-btn" style="background:#b91c1c;">Clear groups</button>
+                    <button type="button" id="po-toggle-const-btn" style="background:#64748b;margin-left:auto;font-size:0.78rem;">Const values ▾</button>
+                    <button type="button" id="po-template-tools-toggle" style="background:#64748b;font-size:0.78rem;">Template options</button>
+                </div>
+                <div id="po-template-tools-wrap" style="display:none;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 10px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:8px;">
+                    <span style="font-size:0.78rem;font-weight:700;color:#334155;">Save groups as template:</span>
+                    <input type="text" id="po-template-name" placeholder="Template name" style="max-width:160px;font-size:0.82rem;padding:3px 7px;border:1px solid #cbd5e1;border-radius:6px;">
+                    <button type="button" id="po-template-save" style="background:#0f766e;font-size:0.78rem;padding:3px 9px;">Save</button>
+                    <span style="color:#cbd5e1;padding:0 2px;">|</span>
+                    <span style="font-size:0.78rem;font-weight:700;color:#334155;">Load template:</span>
+                    <select id="po-template-select" style="font-size:0.82rem;padding:3px 7px;border:1px solid #cbd5e1;border-radius:6px;max-width:200px;"><option value="">Select template</option></select>
+                    <button type="button" id="po-template-preview" style="background:#475569;font-size:0.78rem;padding:3px 9px;">Preview</button>
+                    <button type="button" id="po-template-apply" style="background:#1d4ed8;font-size:0.78rem;padding:3px 9px;">Apply</button>
+                    <button type="button" id="po-template-delete" style="background:#b91c1c;font-size:0.78rem;padding:3px 9px;">Delete</button>
+                    <span id="po-template-status" style="font-size:0.78rem;color:#0f766e;margin-left:4px;"></span>
+                </div>
+                <div id="po-template-preview-wrap" style="display:none;margin-bottom:8px;">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <span style="font-size:0.78rem;font-weight:700;color:#334155;">Template preview (not applied):</span>
+                        <button type="button" id="po-template-stop-preview" style="display:none;background:#475569;font-size:0.78rem;padding:2px 8px;">Hide preview</button>
+                    </div>
+                    <div id="po-template-preview-plate"></div>
+                </div>
+                <div class="po-settings-bar">
+                    <strong style="font-size:0.75rem;color:#334155;">Settings:</strong>
+                    <label><input type="checkbox" id="po-normalized-cb"> Normalized curves</label>
+                    <label><input type="checkbox" id="po-show-labels-cb"> Show well ID</label>
+                    <label id="po-show-group-label" style="display:none;"><input type="checkbox" id="po-show-group-cb"> Show group</label>
+                    <span style="color:#94a3b8;">|</span>
+                    <span style="color:#64748b;">Time unit: ${data.time_unit_suffix}</span>
+                </div>
+                <div class="plate-ov-action-bar">
+                    <button type="button" id="po-act-agg" style="background:#0891b2;">Plot aggregation curves</button>
+                    <button type="button" id="po-act-gvc" style="background:#ea580c; display:none;">Plot groups vs control</button>
+                </div>
+                <div id="po-gvc-wizard" class="po-gvc-wizard">
+                    <div class="po-gvc-step-bar">
+                        <div id="po-gvc-s1" class="po-gvc-step">1. Select controls</div>
+                        <div id="po-gvc-s2" class="po-gvc-step">2. Select groups</div>
+                        <div id="po-gvc-s3" class="po-gvc-step">3. Options &amp; generate</div>
+                    </div>
+                    <div id="po-gvc-instr" class="po-gvc-instr"></div>
+                    <div id="po-gvc-btns"></div>
+                </div>
+                <div class="po-grid-wrap">
+                <table class="po-grid-table" id="po-grid-table">
+                    <colgroup><col style="width:16px">`;
+            for (let c = 0; c < COLS; c++) html += `<col>`;
+            html += `</colgroup><thead><tr><th></th>`;
+            for (let c = 0; c < COLS; c++) {
+                html += `<th class="po-header-cell">${String(c+1).padStart(2,"0")}</th>`;
+            }
+            html += `</tr></thead><tbody>`;
+            for (let r = 0; r < ROWS.length; r++) {
+                html += `<tr><td class="po-row-label">${ROWS[r]}</td>`;
+                for (let c = 0; c < COLS; c++) {
+                    const well = ROWS[r] + String(c+1).padStart(2,"0");
+                    const hasData = data.all_wells.includes(well);
+                    const noDataCls = hasData ? "" : " po-no-data";
+                    html += `<td class="po-cell${noDataCls}" data-well="${well}">
+                        <span class="po-cell-label">${well}</span>
+                        <span class="po-cell-group"></span>
+                        <span class="po-cell-gvc-badge" style="display:none;"></span>
+                    </td>`;
+                }
+                html += `</tr>`;
+            }
+            html += `</tbody></table></div>`;
+            container.innerHTML = html;
+
+            // ── Feature system ─────────────────────────────────────────────
+            function renderFeatureTabs() {
+                const tabsEl = document.getElementById("po-feature-tabs");
+                if (!tabsEl) return;
+                tabsEl.innerHTML = "";
+                // Default "group" tab + user-defined features (exclude internal __default__)
+                const allFeatures = ["", ...Object.keys(poFeatures).filter(k => k !== "__default__")];
+                allFeatures.forEach(fname => {
+                    const btn = document.createElement("button");
+                    btn.type = "button";
+                    btn.className = "po-feature-tab" + (fname === poActiveFeature ? " po-feature-active" : "");
+                    btn.textContent = fname === "" ? "group" : fname;
+                    btn.dataset.feature = fname;
+                    btn.addEventListener("click", function() { switchToFeature(fname); });
+                    tabsEl.appendChild(btn);
+                });
+            }
+
+            function updateConstValueUI() {
+                const isConst = poActiveFeature !== "";
+                const nameInput    = document.getElementById("po-group-name-input");
+                const constWrap    = document.getElementById("po-const-value-wrap");
+                if (nameInput)  nameInput.style.display  = isConst ? "none" : "";
+                if (constWrap)  constWrap.style.display  = isConst ? "flex" : "none";
+                // Update mPrefix visibility based on unit radio
+                updateMPrefixVisibility();
+            }
+
+            function updateMPrefixVisibility() {
+                const mRadio  = document.querySelector('input[name="po-unit-type"][value="M"]');
+                const pctRadio = document.querySelector('input[name="po-unit-type"][value="%"]');
+                const mPrefix  = document.getElementById("po-m-prefix");
+                const numInput = document.getElementById("po-const-number-input");
+                if (mPrefix) mPrefix.style.display = (mRadio && mRadio.checked) ? "" : "none";
+                if (numInput) {
+                    if (pctRadio && pctRadio.checked) {
+                        numInput.min = "0"; numInput.max = "100";
+                    } else {
+                        numInput.removeAttribute("min"); numInput.removeAttribute("max");
+                    }
+                }
+            }
+
+            function getConstValueLabel() {
+                const numInput = document.getElementById("po-const-number-input");
+                const val = (numInput?.value || "").trim();
+                if (!val) return "";
+                const pctRadio = document.querySelector('input[name="po-unit-type"][value="%"]');
+                if (pctRadio && pctRadio.checked) return `${val}%`;
+                const prefix = document.getElementById("po-m-prefix")?.value || "";
+                return `${val} ${prefix}M`;
+            }
+
+            function switchToFeature(fname) {
+                // Save current groups to previous feature
+                if (poActiveFeature !== "") {
+                    poFeatures[poActiveFeature] = JSON.parse(JSON.stringify(poGroups));
+                }
+                // Load new feature's groups
+                Object.keys(poGroups).forEach(k => delete poGroups[k]);
+                if (fname === "") {
+                    // default group tab — nothing saved in poFeatures
+                } else {
+                    if (!poFeatures[fname]) poFeatures[fname] = {};
+                    Object.assign(poGroups, poFeatures[fname]);
+                }
+                poActiveFeature = fname;
+                poSelection.clear();
+                reRenderAllCells();
+                poRenderGroupLegend(); updateGroupLabels(); updateGroupColorSwatch();
+                renderFeatureTabs();
+                updateConstValueUI();
+            }
+
+            // Save default groups into poFeatures["__default__"] so they survive feature switches
+            if (!Object.keys(poFeatures).length && !poActiveFeature) {
+                poFeatures["__default__"] = JSON.parse(JSON.stringify(poGroups));
+            }
+
+            const addFeatureBtn     = document.getElementById("po-add-feature-btn");
+            const addFeatureForm    = document.getElementById("po-add-feature-form");
+            const newFeatureInput   = document.getElementById("po-new-feature-input");
+            const newFeatureConfirm = document.getElementById("po-new-feature-confirm");
+            const newFeatureCancel  = document.getElementById("po-new-feature-cancel");
+
+            function getNewFeatureName() {
+                return (newFeatureInput?.value || "").trim();
+            }
+
+            if (addFeatureBtn) {
+                addFeatureBtn.addEventListener("click", function() {
+                    const show = addFeatureForm.style.display === "none";
+                    addFeatureForm.style.display = show ? "" : "none";
+                    if (show && newFeatureInput) { newFeatureInput.value = ""; newFeatureInput.focus(); }
+                });
+            }
+            if (newFeatureCancel) {
+                newFeatureCancel.addEventListener("click", function() {
+                    addFeatureForm.style.display = "none";
+                    if (newFeatureInput) newFeatureInput.value = "";
+                });
+            }
+            if (newFeatureConfirm) {
+                newFeatureConfirm.addEventListener("click", function() {
+                    const fname = getNewFeatureName();
+                    if (!fname) { newFeatureInput?.focus(); return; }
+                    if (fname === "Groups" || fname === "__default__") {
+                        window.alert("Reserved name. Choose a different name.");
+                        return;
+                    }
+                    if (!poFeatures[fname]) poFeatures[fname] = {};
+                    addFeatureForm.style.display = "none";
+                    if (newFeatureInput) newFeatureInput.value = "";
+                    switchToFeature(fname);
+                });
+            }
+            if (newFeatureInput) {
+                newFeatureInput.addEventListener("keydown", function(e) {
+                    if (e.key === "Enter") newFeatureConfirm?.click();
+                    if (e.key === "Escape") newFeatureCancel?.click();
+                });
+            }
+
+            // Select all wells
+            const selectAllBtn = document.getElementById("po-select-all-btn");
+            if (selectAllBtn) {
+                selectAllBtn.addEventListener("click", function() {
+                    data.all_wells.forEach(w => poSelection.add(w));
+                    reRenderAllCells();
+                    refreshPoInfo();
+                    // Apply pending group color to all newly selected unassigned wells
+                    document.querySelectorAll(".po-cell[data-well]").forEach(cell => {
+                        const well = cell.dataset.well;
+                        if (data.all_wells.includes(well) && poGetGroupForWell(well) === null) {
+                            cell.style.background = poGetPendingGroupColor();
+                        }
+                    });
+                });
+            }
+
+            renderFeatureTabs();
+            updateConstValueUI();
+
+            // Toggle const values bar
+            const toggleConstBtn  = document.getElementById("po-toggle-const-btn");
+            const featureBarEl    = document.getElementById("po-feature-bar");
+            if (toggleConstBtn && featureBarEl) {
+                toggleConstBtn.addEventListener("click", function() {
+                    const showing = featureBarEl.style.display !== "none";
+                    featureBarEl.style.display = showing ? "none" : "";
+                    toggleConstBtn.textContent = showing ? "Const values ▾" : "Const values ▴";
+                    if (showing && poActiveFeature !== "") {
+                        // Switch back to default groups when hiding
+                        switchToFeature("");
+                    }
+                });
+            }
+
+            // Unit radio toggle (show/hide M prefix select)
+            document.querySelectorAll('input[name="po-unit-type"]').forEach(r => {
+                r.addEventListener("change", updateMPrefixVisibility);
+            });
+            // ── End feature system ─────────────────────────────────────────
+
+            const normalizedCb   = document.getElementById("po-normalized-cb");
+            const showLabelsCb   = document.getElementById("po-show-labels-cb");
+            const showGroupCb    = document.getElementById("po-show-group-cb");
+            const groupLegend    = document.getElementById("po-group-legend");
+            const groupColorSwatch = document.getElementById("po-group-color-swatch");
+            const poTemplateNameInput = document.getElementById("po-template-name");
+            const poTemplateSelect = document.getElementById("po-template-select");
+            const poTemplateStatus = document.getElementById("po-template-status");
+            const poTemplateToolsToggle = document.getElementById("po-template-tools-toggle");
+            const poTemplateToolsWrap = document.getElementById("po-template-tools-wrap");
+            const poTemplatePreviewWrap = document.getElementById("po-template-preview-wrap");
+            const poTemplatePreviewPlate = document.getElementById("po-template-preview-plate");
+            const poTemplateStopPreviewBtn = document.getElementById("po-template-stop-preview");
+            const drawModeBtn    = document.getElementById("po-draw-mode-btn");
+            const gridTable      = document.getElementById("po-grid-table");
+            const actionBtns = {
+                agg: document.getElementById("po-act-agg"),
+            };
+            const basePoInfo = `${data.n_files} file(s) | chromatic ${data.chromatic}`;
+            let poActionMode = "";
+
+            // FAB elements (outside renderPlateOvContent scope, persistent)
+            const poFabWrap       = document.getElementById("po-fab-wrap");
+            const poFabBtn        = document.getElementById("po-plot-fab-btn");
+            const poOptsPanel     = document.getElementById("po-plot-opts-panel");
+            const poOptsTitle     = document.getElementById("po-opts-title");
+            const poOptsAggSec    = document.getElementById("po-opts-agg-section");
+            const poOptsGenBtn    = document.getElementById("po-opts-generate-btn");
+            const poOptsCancelBtn = document.getElementById("po-opts-cancel-btn");
+            const poOptsNorm      = document.getElementById("po-opts-normalized");
+            const poOptsXFrom     = document.getElementById("po-opts-xfrom");
+            const poOptsXTo       = document.getElementById("po-opts-xto");
+            const poOptsPlotTitle = document.getElementById("po-opts-plot-title");
+            const poOptsXTitle    = document.getElementById("po-opts-x-title");
+            const poOptsYTitle    = document.getElementById("po-opts-y-title");
+
+            function poActionLabel(key) {
+                if (key === "agg") return "Plot aggregation curves";
+                return "";
+            }
+
+            function refreshPoInfo() {
+                if (!poInfoBar) return;
+                if (poActionMode === "agg") {
+                    poInfoBar.textContent = `${basePoInfo} · ${poSelection.size} well${poSelection.size !== 1 ? "s" : ""} selected`;
+                } else {
+                    poInfoBar.textContent = basePoInfo;
+                }
+            }
+
+            function setPoActionMode(modeKey) {
+                poActionMode = modeKey || "";
+                Object.entries(actionBtns).forEach(([key, btn]) => {
+                    if (!btn) return;
+                    btn.classList.toggle("po-action-armed", key === poActionMode);
+                });
+                // Show/hide FAB
+                const showFab = (poActionMode === "agg");
+                if (poFabWrap) poFabWrap.classList.toggle("visible", showFab);
+                if (!showFab && poOptsPanel) poOptsPanel.classList.remove("visible");
+                // Show/hide options sections
+                if (poOptsAggSec)   poOptsAggSec.style.display   = (poActionMode === "agg")   ? "" : "none";
+                refreshPoInfo();
+            }
+
+            function openWellDetailedPlot(well) {
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = "/plot/from_plate_selection";
+                const add = function(name, value) {
+                    const inp = document.createElement("input");
+                    inp.type = "hidden";
+                    inp.name = name;
+                    inp.value = value;
+                    form.appendChild(inp);
+                };
+                add("wells_json", JSON.stringify([well]));
+                add("normalized_curve", normalizedCb && normalizedCb.checked ? "1" : "0");
+                document.body.appendChild(form);
+                form.submit();
+                document.body.removeChild(form);
+            }
+
+            refreshPoInfo();
+
+            // Compute global y range across all wells for non-normalized view
+            let globalYRange = null;
+            {
+                let gMin = Number.POSITIVE_INFINITY, gMax = Number.NEGATIVE_INFINITY;
+                (data.all_wells || []).forEach(well => {
+                    const preview = data.curve_previews[well];
+                    if (!preview || !preview.y) return;
+                    preview.y.forEach(v => {
+                        const num = Number(v);
+                        if (!Number.isFinite(num)) return;
+                        if (num < gMin) gMin = num;
+                        if (num > gMax) gMax = num;
+                    });
+                });
+                if (Number.isFinite(gMax) && gMax > 0) {
+                    // Use 0 as yMin so absolute amplitude differences are visible across wells
+                    globalYRange = { yMin: 0, yMax: gMax };
+                }
+            }
+
+            // Render SVGs
+            document.querySelectorAll(".po-cell[data-well]").forEach(cell => {
+                const well = cell.dataset.well;
+                if (data.all_wells.includes(well)) {
+                    poUpdateCellVisual(cell, well, normalizedCb, null, globalYRange);
+                }
+            });
+
+            // Re-render curves when normalized toggle changes
+            function reRenderAllCells() {
+                document.querySelectorAll(".po-cell[data-well]").forEach(cell => {
+                    const well = cell.dataset.well;
+                    if (data.all_wells.includes(well)) {
+                        poUpdateCellVisual(cell, well, normalizedCb, null, globalYRange);
+                    }
+                });
+                poGvcUpdateCellVisuals();
+            }
+            if (normalizedCb) normalizedCb.addEventListener("change", reRenderAllCells);
+
+            // ── GvC wizard functions ─────────────────────────────────────────
+            function poGvcUpdateCellVisuals() {
+                if (!gridTable) return;
+                gridTable.querySelectorAll(".po-cell[data-well]").forEach(cell => {
+                    const well = cell.dataset.well;
+                    const badge = cell.querySelector(".po-cell-gvc-badge");
+                    cell.removeAttribute("data-gvc");
+                    if (badge) { badge.style.display = "none"; badge.textContent = ""; }
+                    if (poGvcStep === 0 || !data.all_wells.includes(well)) return;
+                    const isCtrl  = poGvcControlWells.has(well);
+                    const grpName = poGetGroupForWell(well);
+                    const grpIdx  = grpName ? poGvcSelectedGroups.indexOf(grpName) : -1;
+                    const isGrp   = grpIdx >= 0;
+                    if (isCtrl && isGrp) {
+                        cell.setAttribute("data-gvc", "both");
+                        if (badge) { badge.style.display = ""; badge.textContent = `C·${grpIdx+1}`; badge.style.color = "#f97316"; }
+                    } else if (isCtrl) {
+                        cell.setAttribute("data-gvc", "control");
+                        if (badge) { badge.style.display = ""; badge.textContent = "C"; badge.style.color = "#ef4444"; }
+                    } else if (isGrp) {
+                        cell.setAttribute("data-gvc", "group");
+                        if (badge) { badge.style.display = ""; badge.textContent = String(grpIdx+1); badge.style.color = "#7c3aed"; }
+                    }
+                });
+            }
+
+            function poGvcRenderStep3() {
+                const instrEl = document.getElementById("po-gvc-instr");
+                const btnsEl  = document.getElementById("po-gvc-btns");
+                if (!instrEl || !btnsEl) return;
+                instrEl.innerHTML = `<strong>Controls:</strong> ${[...poGvcControlWells].sort().join(", ")} &nbsp;|&nbsp; <strong>Groups (${poGvcSelectedGroups.length}):</strong> ${poGvcSelectedGroups.join(", ")}`;
+                const allGroupWells = [];
+                poGvcSelectedGroups.forEach(g => (poGroups[g] || []).forEach(w => allGroupWells.push({group:g, well:w})));
+                let exclHtml = "";
+                if (allGroupWells.length) {
+                    exclHtml = `<div style="font-size:0.78rem;font-weight:700;color:#334155;margin-bottom:2px;">Exclude wells (optional):</div>
+<div style="display:flex;flex-wrap:wrap;gap:3px 10px;">` +
+                        allGroupWells.map(({group,well}) =>
+                            `<label style="display:inline-flex;align-items:center;gap:3px;font-size:0.8rem;cursor:pointer;">
+                                <input type="checkbox" class="po-gvc-excl" value="${well}"> ${well} <span style="color:#7c3aed;font-size:0.72rem;">(${group})</span>
+                            </label>`).join("") + `</div>`;
+                }
+                btnsEl.innerHTML = exclHtml + `
+                    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+                        <span style="font-size:0.8rem;font-weight:700;color:#334155;">Plot:</span>
+                        <label style="font-size:0.82rem;display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="po-gvc-norm" value="raw" checked> Raw</label>
+                        <label style="font-size:0.82rem;display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="po-gvc-norm" value="normalized"> Normalized</label>
+                        <label style="font-size:0.82rem;display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="po-gvc-norm" value="both"> Both</label>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+                        <button type="button" id="po-gvc-back3" style="background:#64748b;font-size:0.82rem;padding:4px 10px;">← Back</button>
+                        <button type="button" id="po-gvc-generate" style="background:#7c3aed;font-size:0.82rem;padding:4px 14px;">Generate plots →</button>
+                        <button type="button" id="po-gvc-cancel3" style="background:#475569;font-size:0.82rem;padding:4px 10px;">Cancel</button>
+                    </div>`;
+                document.getElementById("po-gvc-back3")?.addEventListener("click", function() {
+                    poGvcStep = 2; poGvcRenderWizard(); poGvcUpdateCellVisuals();
+                });
+                document.getElementById("po-gvc-cancel3")?.addEventListener("click", poGvcCancel);
+                document.getElementById("po-gvc-generate")?.addEventListener("click", function() {
+                    const excluded = [...document.querySelectorAll(".po-gvc-excl:checked")].map(cb => cb.value);
+                    const normSetting = document.querySelector('input[name="po-gvc-norm"]:checked')?.value || "raw";
+                    const form = document.createElement("form");
+                    form.method = "POST";
+                    form.action = "/plot/group_vs_control/render";
+                    form.target = "_blank";
+                    const add = (n,v) => { const i=document.createElement("input"); i.type="hidden"; i.name=n; i.value=v; form.appendChild(i); };
+                    add("dataset_id", data.plate_session_id);
+                    add("norm_setting", normSetting);
+                    add("group_order", JSON.stringify(poGvcSelectedGroups));
+                    [...poGvcControlWells].forEach(w => add("control_well", w));
+                    excluded.forEach(w => add("exclude_well", w));
+                    document.body.appendChild(form); form.submit(); document.body.removeChild(form);
+                });
+            }
+
+            function poGvcRenderWizard() {
+                const wizard = document.getElementById("po-gvc-wizard");
+                if (!wizard) return;
+                [1,2,3].forEach(n => {
+                    const el = document.getElementById(`po-gvc-s${n}`);
+                    if (el) el.className = "po-gvc-step" + (n === poGvcStep ? " gvc-active" : (n < poGvcStep ? " gvc-done" : ""));
+                });
+                const instrEl = document.getElementById("po-gvc-instr");
+                const btnsEl  = document.getElementById("po-gvc-btns");
+                if (!instrEl || !btnsEl) return;
+                if (poGvcStep === 1) {
+                    instrEl.textContent = "Click wells on the plate to mark them as control curves. Click again to deselect.";
+                    btnsEl.innerHTML = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <span class="po-gvc-count" id="po-gvc-ctrl-count">${poGvcControlWells.size} control well${poGvcControlWells.size!==1?"s":""} selected</span>
+                        <button type="button" id="po-gvc-next1" style="background:#a855f7;font-size:0.82rem;padding:4px 12px;">Next → Select groups</button>
+                        <button type="button" id="po-gvc-cancel1" style="background:#475569;font-size:0.82rem;padding:4px 10px;">Cancel</button>
+                    </div>`;
+                    document.getElementById("po-gvc-next1")?.addEventListener("click", function() {
+                        if (!poGvcControlWells.size) { window.alert("Select at least one control well first."); return; }
+                        poGvcStep = 2; poGvcSelectedGroups = []; poGvcRenderWizard(); poGvcUpdateCellVisuals();
+                    });
+                    document.getElementById("po-gvc-cancel1")?.addEventListener("click", poGvcCancel);
+                } else if (poGvcStep === 2) {
+                    instrEl.textContent = "Click any grouped well to toggle its group on/off. Groups are numbered in the order you select them.";
+                    btnsEl.innerHTML = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <span class="po-gvc-count" id="po-gvc-grp-count">${poGvcSelectedGroups.length} group${poGvcSelectedGroups.length!==1?"s":""} selected — click wells to toggle, click again to reorder</span>
+                        <button type="button" id="po-gvc-back2" style="background:#64748b;font-size:0.82rem;padding:4px 10px;">← Back</button>
+                        <button type="button" id="po-gvc-next2" style="background:#a855f7;font-size:0.82rem;padding:4px 12px;">Next → Options</button>
+                        <button type="button" id="po-gvc-cancel2" style="background:#475569;font-size:0.82rem;padding:4px 10px;">Cancel</button>
+                    </div>`;
+                    document.getElementById("po-gvc-back2")?.addEventListener("click", function() {
+                        poGvcStep = 1; poGvcRenderWizard(); poGvcUpdateCellVisuals();
+                    });
+                    document.getElementById("po-gvc-next2")?.addEventListener("click", function() {
+                        if (!poGvcSelectedGroups.length) {
+                            const all = Object.keys(poGroups).filter(g => (poGroups[g]||[]).length > 0);
+                            if (!all.length) { window.alert("No groups available. Assign wells to groups first."); return; }
+                            poGvcSelectedGroups = all.slice();
+                        }
+                        poGvcStep = 3; poGvcRenderWizard(); poGvcUpdateCellVisuals();
+                    });
+                    document.getElementById("po-gvc-cancel2")?.addEventListener("click", poGvcCancel);
+                } else if (poGvcStep === 3) {
+                    poGvcRenderStep3();
+                }
+            }
+
+            function poGvcCancel() {
+                poGvcStep = 0; poGvcControlWells.clear(); poGvcSelectedGroups = [];
+                const wizard = document.getElementById("po-gvc-wizard");
+                if (wizard) wizard.classList.remove("active");
+                poGvcUpdateCellVisuals();
+            }
+
+            function startGvcWizard() {
+                if (poDrawMode) { window.alert("Turn off grouping mode first."); return; }
+                if (!Object.keys(poGroups).some(g => (poGroups[g]||[]).length > 0)) {
+                    window.alert("Assign wells to groups first before using groups vs control."); return;
+                }
+                poGvcStep = 1; poGvcControlWells.clear(); poGvcSelectedGroups = [];
+                const wizard = document.getElementById("po-gvc-wizard");
+                if (wizard) wizard.classList.add("active");
+                poGvcRenderWizard(); poGvcUpdateCellVisuals();
+            }
+            // ── End GvC wizard ───────────────────────────────────────────────
+
+            // Settings: show/hide overlay labels via CSS classes on the table
+            if (showLabelsCb && gridTable) {
+                showLabelsCb.addEventListener("change", function() {
+                    gridTable.classList.toggle("po-show-labels", this.checked);
+                });
+            }
+            if (showGroupCb && gridTable) {
+                showGroupCb.addEventListener("change", function() {
+                    gridTable.classList.toggle("po-show-group", this.checked);
+                });
+            }
+
+            function updateGroupLabels() {
+                if (!gridTable) return;
+                gridTable.querySelectorAll(".po-cell[data-well]").forEach(cell => {
+                    const well = cell.dataset.well;
+                    const span = cell.querySelector(".po-cell-group");
+                    if (!span) return;
+                    span.textContent = poGetGroupForWell(well) || "";
+                });
+            }
+
+            function poTemplateToGroups(tpl) {
+                const out = {};
+                if (!tpl || !Array.isArray(tpl.groups)) return out;
+                tpl.groups.forEach(g => {
+                    const name = String(g.name || "").trim();
+                    if (!name) return;
+                    const wells = Array.isArray(g.cells) ? g.cells.filter(w => data.all_wells.includes(w)) : [];
+                    if (wells.length) out[name] = Array.from(new Set(wells)).sort();
+                });
+                return out;
+            }
+
+            function hideTemplatePreview() {
+                if (poTemplatePreviewWrap) poTemplatePreviewWrap.style.display = "none";
+                if (poTemplatePreviewPlate) poTemplatePreviewPlate.innerHTML = "";
+                if (poTemplateStopPreviewBtn) poTemplateStopPreviewBtn.style.display = "none";
+            }
+
+            function setTemplateToolsOpen(open) {
+                if (poTemplateToolsWrap) poTemplateToolsWrap.style.display = open ? "flex" : "none";
+                if (poTemplateToolsToggle) {
+                    poTemplateToolsToggle.textContent = open ? "Hide template options" : "Template options";
+                }
+            }
+            setTemplateToolsOpen(false);
+
+            function renderTemplatePreviewPlate(groupsDict) {
+                if (!poTemplatePreviewPlate) return;
+                const wellToGroup = {};
+                Object.entries(groupsDict || {}).forEach(([gname, ws], idx) => {
+                    (Array.isArray(ws) ? ws : []).forEach(well => {
+                        if (data.all_wells.includes(well)) {
+                            wellToGroup[well] = { name: gname, idx };
+                        }
+                    });
+                });
+
+                let previewHtml = '<div class="po-template-preview-shell"><table class="po-template-preview-table">';
+                previewHtml += '<thead><tr><th class="po-template-preview-row"></th>';
+                for (let c = 0; c < COLS; c++) {
+                    previewHtml += `<th>${String(c + 1).padStart(2, "0")}</th>`;
+                }
+                previewHtml += "</tr></thead><tbody>";
+                for (let r = 0; r < ROWS.length; r++) {
+                    previewHtml += `<tr><th class="po-template-preview-row">${ROWS[r]}</th>`;
+                    for (let c = 0; c < COLS; c++) {
+                        const well = ROWS[r] + String(c + 1).padStart(2, "0");
+                        const grp = wellToGroup[well] || null;
+                        const hasData = data.all_wells.includes(well);
+                        const cellBg = grp ? poGroupColor(grp.idx) : (hasData ? "#ffffff" : "#f1f5f9");
+                        const cellTitle = grp ? `${well} — ${grp.name}` : (hasData ? `${well} — no group` : `${well} — no data`);
+                        const cellClasses = `po-template-preview-cell${hasData ? "" : " po-template-no-data"}`;
+                        const groupText = grp ? escapeHtml(grp.name) : "";
+                        const wellText = hasData ? `<span class="po-template-preview-well">${well}</span>` : "";
+                        previewHtml += `<td title="${escapeHtml(cellTitle)}" class="${cellClasses}" style="background:${cellBg};">${groupText}${wellText}</td>`;
+                    }
+                    previewHtml += "</tr>";
+                }
+                previewHtml += "</tbody></table></div>";
+
+                const legend = Object.entries(groupsDict || {}).map(([name, wells], idx) => {
+                    const n = Array.isArray(wells) ? wells.length : 0;
+                    return `<span style="display:inline-flex; align-items:center; gap:5px; margin:4px 10px 0 0; font-size:0.74rem; color:#334155;">
+                        <span style="width:9px; height:9px; border-radius:50%; background:${poGroupColor(idx)}; border:1px solid rgba(15,23,42,0.15);"></span>
+                        ${escapeHtml(name)} (${n})
+                    </span>`;
+                }).join("");
+                previewHtml += `<div style="margin-top:6px;">${legend}</div>`;
+
+                poTemplatePreviewPlate.innerHTML = previewHtml;
+                if (poTemplatePreviewWrap) poTemplatePreviewWrap.style.display = "";
+                if (poTemplateStopPreviewBtn) poTemplateStopPreviewBtn.style.display = "";
+            }
+
+            function refreshPoTemplateSelect() {
+                if (!poTemplateSelect) return;
+                const templates = loadTemplatesFromStorage();
+                poTemplateSelect.innerHTML = '<option value="">Select template</option>';
+                templates.forEach(t => {
+                    const opt = document.createElement("option");
+                    opt.value = String(t.id);
+                    opt.textContent = `${t.name} (${(t.groups || []).length} groups)`;
+                    poTemplateSelect.appendChild(opt);
+                });
+            }
+            refreshPoTemplateSelect();
+
+            poTemplateToolsToggle?.addEventListener("click", function() {
+                const isOpen = poTemplateToolsWrap && poTemplateToolsWrap.style.display !== "none";
+                setTemplateToolsOpen(!isOpen);
+            });
+
+            document.getElementById("po-template-save")?.addEventListener("click", function() {
+                const name = (poTemplateNameInput?.value || "").trim();
+                if (!name) {
+                    window.alert("Enter a template name first.");
+                    return;
+                }
+                const groupsDict = Object.fromEntries(
+                    Object.entries(poGroups || {}).map(([g, ws]) => [g, Array.isArray(ws) ? ws.slice() : []])
+                );
+                const ok = saveGroupsDictAsTemplate(name, groupsDict);
+                if (ok) {
+                    if (poTemplateStatus) poTemplateStatus.textContent = `Saved template '${name}'.`;
+                    if (poTemplateNameInput) poTemplateNameInput.value = "";
+                    refreshPoTemplateSelect();
+                }
+            });
+
+            document.getElementById("po-template-preview")?.addEventListener("click", function() {
+                const tid = String(poTemplateSelect?.value || "");
+                if (!tid) return;
+                const templates = loadTemplatesFromStorage();
+                const tpl = templates.find(t => String(t.id) === tid);
+                if (!tpl) return;
+                const groupsDict = poTemplateToGroups(tpl);
+                if (!Object.keys(groupsDict).length) {
+                    if (poTemplateStatus) poTemplateStatus.textContent = "Template has no wells for current plate.";
+                    hideTemplatePreview();
+                    return;
+                }
+                renderTemplatePreviewPlate(groupsDict);
+                if (poTemplateStatus) poTemplateStatus.textContent = "Preview shown on plate overview (not applied).";
+            });
+
+            document.getElementById("po-template-apply")?.addEventListener("click", function() {
+                const tid = String(poTemplateSelect?.value || "");
+                if (!tid) return;
+                const templates = loadTemplatesFromStorage();
+                const tpl = templates.find(t => String(t.id) === tid);
+                if (!tpl) return;
+                const groupsDict = poTemplateToGroups(tpl);
+                if (!Object.keys(groupsDict).length) {
+                    window.alert("Template has no wells matching the current plate.");
+                    return;
+                }
+                poGroups = groupsDict;
+                poRenderGroupLegend(); updateGroupLabels();
+                reRenderAllCells();
+                if (poTemplateStatus) poTemplateStatus.textContent = "Template applied.";
+                hideTemplatePreview();
+            });
+
+            poTemplateStopPreviewBtn?.addEventListener("click", function() {
+                hideTemplatePreview();
+                if (poTemplateStatus) poTemplateStatus.textContent = "Preview hidden.";
+            });
+
+            poTemplateSelect?.addEventListener("change", function() {
+                hideTemplatePreview();
+                if (poTemplateStatus) poTemplateStatus.textContent = "";
+            });
+
+            document.getElementById("po-template-delete")?.addEventListener("click", function() {
+                const tid = String(poTemplateSelect?.value || "");
+                if (!tid) { if (poTemplateStatus) poTemplateStatus.textContent = "Select a template first."; return; }
+                const templates = loadTemplatesFromStorage();
+                const tpl = templates.find(t => String(t.id) === tid);
+                if (!tpl) return;
+                if (!window.confirm(`Delete template '${tpl.name}'?`)) return;
+                const updated = templates.filter(t => String(t.id) !== tid);
+                localStorage.setItem("po_group_templates", JSON.stringify(updated));
+                if (poTemplateStatus) poTemplateStatus.textContent = `Deleted template '${tpl.name}'.`;
+                refreshPoTemplateSelect();
+                hideTemplatePreview();
+            });
+
+            // Render group legend
+            poRenderGroupLegend();
+
+            // Group color swatch — shows pending group color
+            function updateGroupColorSwatch() {
+                if (groupColorSwatch) groupColorSwatch.style.background = poGetPendingGroupColor();
+            }
+            updateGroupColorSwatch();
+            const groupNameInput = document.getElementById("po-group-name-input");
+            if (groupNameInput) {
+                groupNameInput.addEventListener("input", updateGroupColorSwatch);
+            }
+
+            // Grouping mode toggle
+            if (drawModeBtn) {
+                drawModeBtn.addEventListener("click", function() {
+                    poDrawMode = !poDrawMode;
+                    drawModeBtn.textContent = poDrawMode ? "Grouping mode: ON" : "Grouping mode: OFF";
+                    drawModeBtn.style.background = poDrawMode ? "#16a34a" : "#475569";
+                    if (poDrawMode) {
+                        setPoActionMode("");
+                    }
+                });
+            }
+
+            // Cell interaction
+            const table = document.getElementById("po-grid-table");
+            if (table) {
+                table.addEventListener("mousedown", function(evt) {
+                    const cell = evt.target.closest(".po-cell[data-well]");
+                    if (!cell) return;
+                    const well = cell.dataset.well;
+                    if (!data.all_wells.includes(well)) return;
+                    if (poDrawMode) {
+                        poDragging = true;
+                        const assignedGroup = poGetGroupForWell(well);
+                        if (assignedGroup !== null) {
+                            // Remove from its group
+                            poGroups[assignedGroup] = poGroups[assignedGroup].filter(w => w !== well);
+                            if (!poGroups[assignedGroup].length) delete poGroups[assignedGroup];
+                            poSelection.delete(well);
+                            poUpdateCellVisual(cell, well, normalizedCb, null, globalYRange);
+                            updateGroupLabels();
+                        } else if (poSelection.has(well)) {
+                            poSelection.delete(well);
+                            poUpdateCellVisual(cell, well, normalizedCb, null, globalYRange);
+                        } else {
+                            poSelection.add(well);
+                            poUpdateCellVisual(cell, well, normalizedCb, null, globalYRange);
+                            cell.style.background = poGetPendingGroupColor();
+                        }
+                        evt.preventDefault();
+                    }
+                });
+                table.addEventListener("mouseover", function(evt) {
+                    if (!poDrawMode || !poDragging) return;
+                    const cell = evt.target.closest(".po-cell[data-well]");
+                    if (!cell) return;
+                    const well = cell.dataset.well;
+                    if (!data.all_wells.includes(well)) return;
+                    poSelection.add(well);
+                    poUpdateCellVisual(cell, well, normalizedCb, null, globalYRange);
+                    if (poGetGroupForWell(well) === null) cell.style.background = poGetPendingGroupColor();
+                });
+                document.addEventListener("mouseup", function() {
+                    if (poDragging && poDrawMode) poSaveGroups();
+                    poDragging = false;
+                });
+                table.addEventListener("click", function(evt) {
+                    if (poDrawMode) return;
+                    const cell = evt.target.closest(".po-cell[data-well]");
+                    if (!cell) return;
+                    const well = cell.dataset.well;
+                    if (!data.all_wells.includes(well)) return;
+                    // GvC wizard intercepts clicks in steps 1 & 2
+                    if (poGvcStep === 1) {
+                        if (poGvcControlWells.has(well)) poGvcControlWells.delete(well);
+                        else poGvcControlWells.add(well);
+                        poGvcUpdateCellVisuals();
+                        const ct = document.getElementById("po-gvc-ctrl-count");
+                        if (ct) ct.textContent = `${poGvcControlWells.size} control well${poGvcControlWells.size!==1?"s":""} selected`;
+                        return;
+                    }
+                    if (poGvcStep === 2) {
+                        const grpName = poGetGroupForWell(well);
+                        if (!grpName) return;
+                        const idx = poGvcSelectedGroups.indexOf(grpName);
+                        if (idx >= 0) poGvcSelectedGroups.splice(idx, 1);
+                        else poGvcSelectedGroups.push(grpName);
+                        poGvcUpdateCellVisuals();
+                        const ct = document.getElementById("po-gvc-grp-count");
+                        if (ct) ct.textContent = `${poGvcSelectedGroups.length} group${poGvcSelectedGroups.length!==1?"s":""} selected — click wells to toggle, click again to reorder`;
+                        return;
+                    }
+                    if (poGvcStep === 3) return;
+                    if (poActionMode) {
+                        if (poSelection.has(well)) {
+                            poSelection.delete(well);
+                        } else {
+                            poSelection.add(well);
+                        }
+                        poUpdateCellVisual(cell, well, normalizedCb, null, globalYRange);
+                        refreshPoInfo();
+                        return;
+                    }
+                    openWellDetailedPlot(well);
+                });
+            }
+
+            // Assign button
+            function poSaveGroups() {
+                fetch("/plate_overview/update_groups", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/x-www-form-urlencoded"},
+                    body: `plate_session_id=${encodeURIComponent(data.plate_session_id)}&groups_json=${encodeURIComponent(JSON.stringify(poGroups))}`,
+                }).catch(() => {});
+            }
+
+            const assignBtn = document.getElementById("po-assign-btn");
+            if (assignBtn) {
+                assignBtn.addEventListener("click", function() {
+                    const gname = poActiveFeature !== ""
+                        ? getConstValueLabel()
+                        : (groupNameInput?.value || "").trim();
+                    if (!gname) {
+                        window.alert(poActiveFeature !== "" ? "Enter a value." : "Enter a group name.");
+                        return;
+                    }
+                    if (!poSelection.size) { window.alert("Select wells first."); return; }
+                    if (!poGroups[gname]) poGroups[gname] = [];
+                    poSelection.forEach(w => {
+                        if (!poGroups[gname].includes(w)) poGroups[gname].push(w);
+                    });
+                    poGroups[gname].sort();
+                    poSelection.clear();
+                    reRenderAllCells();
+                    poRenderGroupLegend(); updateGroupLabels();
+                    updateGroupColorSwatch();
+                    poSaveGroups();
+                });
+            }
+
+            // Clear selection
+            const clearSelBtn = document.getElementById("po-clear-sel-btn");
+            if (clearSelBtn) {
+                clearSelBtn.addEventListener("click", function() {
+                    poSelection.clear();
+                    reRenderAllCells();
+                    refreshPoInfo();
+                });
+            }
+
+            // Clear groups
+            const clearGroupsBtn = document.getElementById("po-clear-groups-btn");
+            if (clearGroupsBtn) {
+                clearGroupsBtn.addEventListener("click", function() {
+                    if (!window.confirm("Clear all groups?")) return;
+                    poGroups = {};
+                    reRenderAllCells();
+                    poRenderGroupLegend(); updateGroupLabels();
+                    updateGroupColorSwatch();
+                    poSaveGroups();
+                });
+            }
+
+            // Action buttons
+            function poPostForm(action, fields, targetBlank=true) {
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = action;
+                if (targetBlank) form.target = "_blank";
+                Object.entries(fields).forEach(([k, v]) => {
+                    if (Array.isArray(v)) {
+                        v.forEach((item) => {
+                            const inp = document.createElement("input");
+                            inp.type = "hidden";
+                            inp.name = k;
+                            inp.value = item;
+                            form.appendChild(inp);
+                        });
+                    } else {
+                        const inp = document.createElement("input");
+                        inp.type = "hidden";
+                        inp.name = k;
+                        inp.value = v;
+                        form.appendChild(inp);
+                    }
+                });
+                document.body.appendChild(form);
+                form.submit();
+                document.body.removeChild(form);
+            }
+
+            function poGetSelectedOrGroupedWells() {
+                if (poSelection.size) return Array.from(poSelection).sort();
+                const grouped = new Set();
+                Object.values(poGroups).forEach(ws => (ws || []).forEach(w => grouped.add(w)));
+                return grouped.size ? Array.from(grouped).sort() : data.all_wells.slice().sort();
+            }
+
+            function groupsFilteredBySelection(groupsDict, selectedWells) {
+                if (!selectedWells || !selectedWells.length) return groupsDict;
+                const sel = new Set(selectedWells);
+                const out = {};
+                Object.entries(groupsDict || {}).forEach(([g, ws]) => {
+                    const keep = (Array.isArray(ws) ? ws : []).filter(w => sel.has(w));
+                    if (keep.length) out[g] = keep;
+                });
+                return out;
+            }
+
+            function armAction(actionKey) {
+                if (poDrawMode) {
+                    window.alert("Turn off grouping mode first.");
+                    return;
+                }
+                if (poActionMode === actionKey) {
+                    // Toggle off
+                    setPoActionMode("");
+                    poSelection.clear();
+                    reRenderAllCells();
+                    return;
+                }
+                poSelection.clear();
+                reRenderAllCells();
+                setPoActionMode(actionKey);
+            }
+
+            function runPlotAgg() {
+                const wells = poGetSelectedOrGroupedWells();
+                if (!wells.length) { window.alert("Select at least one well."); return; }
+                const norm = poOptsNorm ? (poOptsNorm.checked ? "1" : "0") : "0";
+                const xFrom = poOptsXFrom?.value.trim() || "";
+                const xTo   = poOptsXTo?.value.trim() || "";
+                const fields = {
+                    dataset_id: data.plate_session_id,
+                    groups_json: JSON.stringify(poGroups),
+                    wells: wells,
+                    normalized_curve: norm,
+                    custom_plot_title: poOptsPlotTitle?.value.trim() || "",
+                    custom_x_label:    poOptsXTitle?.value.trim() || "",
+                    custom_y_label:    poOptsYTitle?.value.trim() || "",
+                };
+                if (xFrom !== "") fields.x_from = xFrom;
+                if (xTo   !== "") fields.x_to   = xTo;
+                poPostForm("/plot/render", fields);
+                setPoActionMode("");
+                poOptsPanel?.classList.remove("visible");
+            }
+
+            // Wire FAB button
+            if (poFabBtn) {
+                poFabBtn.addEventListener("click", function() {
+                    if (!poOptsPanel) return;
+                    poOptsPanel.classList.toggle("visible");
+                });
+            }
+            if (poOptsGenBtn) {
+                poOptsGenBtn.addEventListener("click", function() {
+                    if (poActionMode === "agg") runPlotAgg();
+                });
+            }
+            if (poOptsCancelBtn) {
+                poOptsCancelBtn.addEventListener("click", function() {
+                    poOptsPanel?.classList.remove("visible");
+                });
+            }
+
+            actionBtns.agg?.addEventListener("click", function() { armAction("agg"); });
+
+            document.getElementById("po-act-gvc")?.addEventListener("click", function() {
+                startGvcWizard();
+            });
+        }
+
+        // Open plate overview modal
+        if (openPoBtn) {
+            openPoBtn.addEventListener("click", async function() {
+                if (!poModal) return;
+                // Reset all state
+                poGroups = {};
+                poFeatures = { "m0": {}, "seed conc": {} };
+                poActiveFeature = "";
+                poSelection = new Set();
+                poDrawMode = false;
+                poGvcStep = 0; poGvcControlWells.clear(); poGvcSelectedGroups = [];
+                poTabs = [];
+                poActiveTabIdx = -1;
+                pickerVisible = false;
+                if (poRunPicker) { poRunPicker.classList.remove("visible"); poRunPicker.innerHTML = ""; }
+                if (poTabBar) { poTabBar.innerHTML = ""; }
+                // Hide FAB on fresh open
+                const fab = document.getElementById("po-fab-wrap");
+                if (fab) fab.classList.remove("visible");
+                // Show modal with loading state
+                _halvingBannerDismissed = false;
+                if (poContent) poContent.innerHTML = '<div class="po-loading">Loading plate data…</div>';
+                poModal.classList.add("show");
+                poModal.setAttribute("aria-hidden", "false");
+
+                // Gather form data for current upload set
+                const mainForm = openPoBtn.closest("form");
+                const fd = new FormData(mainForm || document.createElement("form"));
+                try {
+                    const resp = await fetch("/plate_overview/data", { method: "POST", body: fd });
+                    const data = await resp.json();
+                    if (!resp.ok || !data.ok) {
+                        if (poContent) poContent.innerHTML = `<div class="po-loading" style="color:#b91c1c;">Error: ${data.error || "Could not load plate data."}</div>`;
+                        return;
+                    }
+                    // Figure out the label for the first tab
+                    const currentRunId = fd.get("upload_set_id") || "";
+                    const currentRun = PO_SAVED_RUNS.find(r => r.id === currentRunId);
+                    const firstLabel = currentRun
+                        ? (currentRun.run_name || currentRun.id.slice(0,8)).slice(0,30)
+                        : (data.n_files ? `${data.n_files} file${data.n_files>1?"s":""}` : "Current");
+                    poTabs = [{
+                        label: firstLabel,
+                        runId: currentRunId,
+                        data: data,
+                        groups: JSON.parse(JSON.stringify(data.groups || {})),
+                        features: { "m0": {}, "seed conc": {} },
+                        activeFeature: ""
+                    }];
+                    poActiveTabIdx = 0;
+                    loadTabState(0);
+                    renderTabBar();
+                    renderPlateOvContent(poContent, data);
+                } catch(err) {
+                    if (poContent) poContent.innerHTML = `<div class="po-loading" style="color:#b91c1c;">Network error.</div>`;
+                }
+            });
+        }
+
+        // Close button
+        function closePoModal() {
+            if (poModal) {
+                poModal.classList.remove("show");
+                poModal.setAttribute("aria-hidden", "true");
+            }
+            // Hide FAB when modal closes
+            const fab = document.getElementById("po-fab-wrap");
+            if (fab) fab.classList.remove("visible");
+        }
+        if (closePoBtn) {
+            closePoBtn.addEventListener("click", closePoModal);
+        }
+        // Dismiss halving banner
+        const halvingBannerClose = document.getElementById("po-halving-banner-close");
+        if (halvingBannerClose) {
+            halvingBannerClose.addEventListener("click", function() {
+                _halvingBannerDismissed = true;
+                const banner = document.getElementById("po-halving-banner");
+                if (banner) banner.classList.remove("show");
+            });
+        }
+        if (poModal) {
+            poModal.addEventListener("click", function(evt) {
+                if (evt.target === poModal) closePoModal();
+            });
+        }
+
+        // ── Sidebar: saved runs ───────────────────────────────────────────────
+        const poSidebar = document.getElementById("po-sidebar");
+        const poSidebarToggle = document.getElementById("po-sidebar-toggle");
+        const poSidebarRunList = document.getElementById("po-sidebar-run-list");
+
+        function renderSidebarRuns() {
+            if (!poSidebarRunList) return;
+            const activeRunId = poTabs[poActiveTabIdx]?.runId || "";
+            if (!PO_SAVED_RUNS || PO_SAVED_RUNS.length === 0) {
+                poSidebarRunList.innerHTML = '<div style="color:#94a3b8;font-size:0.78rem;padding:4px;">No saved files.</div>';
+                return;
+            }
+            poSidebarRunList.innerHTML = "";
+            PO_SAVED_RUNS.forEach(function(run) {
+                const div = document.createElement("div");
+                div.className = "po-sidebar-run" + (run.id === activeRunId ? " active" : "");
+                const label = run.run_name || run.label || run.id.slice(0, 10);
+                const date = run.created_at ? run.created_at.substring(0, 10) : "";
+                const folder = run.folder_name ? `<span style="font-size:0.7rem;color:#94a3b8;margin-left:4px;">[${run.folder_name}]</span>` : "";
+                div.innerHTML = `<div>${label}${folder}</div><div class="po-sidebar-run-date">${date}</div>`;
+                div.addEventListener("click", function() {
+                    loadRunIntoTab(run);
+                    renderSidebarRuns();
+                });
+                poSidebarRunList.appendChild(div);
+            });
+        }
+
+        if (poSidebarToggle && poSidebar) {
+            poSidebarToggle.addEventListener("click", function() {
+                const collapsed = poSidebar.classList.toggle("collapsed");
+                poSidebarToggle.textContent = collapsed ? "◀" : "▶";
+                if (!collapsed) renderSidebarRuns();
+            });
+        }
+
+        // Re-render sidebar highlight when a tab is clicked
+        if (poTabBar) {
+            poTabBar.addEventListener("click", function() {
+                if (poSidebar && !poSidebar.classList.contains("collapsed")) {
+                    setTimeout(renderSidebarRuns, 50);
+                }
+            });
+        }
+    })();
+    </script>

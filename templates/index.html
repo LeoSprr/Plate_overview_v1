@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Plate Overview</title>
+    <style>
+        body { padding: 0; max-width: none; margin: 0; }
+        .site-nav {
+            position: sticky; top: 0; z-index: 200;
+            background: #0f172a; color: white;
+            display: flex; align-items: center; height: 48px;
+            padding: 0 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.35); gap: 12px;
+        }
+        .site-nav-brand { font-weight: 700; font-size: 1.05rem; color: #e2e8f0; letter-spacing: 0.04em; }
+        .nav-run-pill {
+            background: #1e3a5f; border: 1px solid #2563eb55; border-radius: 20px;
+            padding: 2px 10px; font-size: 0.75rem; color: #7dd3fc; white-space: nowrap;
+        }
+        .site-body { max-width: none; width: 100%; margin: 0; padding: 16px 18px 40px; box-sizing: border-box; }
+        .runs-explorer {
+            margin-top: 8px; border: 1px solid #cbd5e1; border-radius: 10px;
+            background: #ffffff; display: grid; grid-template-columns: 220px 1fr;
+            min-height: 160px; overflow: hidden;
+        }
+        .folders-pane { border-right: 1px solid #e2e8f0; background: #f8fafc; padding: 10px; }
+        .runs-pane { padding: 10px; }
+        .pane-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 8px; color: #334155; }
+        .folder-item, .run-item {
+            padding: 7px 8px; border-radius: 8px; cursor: pointer;
+            font-size: 0.9rem; line-height: 1.2;
+        }
+        .run-item { cursor: grab; }
+        .run-item:active { cursor: grabbing; }
+        .folder-item:hover, .run-item:hover { background: #e2e8f0; }
+        .folder-item.active, .run-item.active { background: #dbeafe; color: #1d4ed8; font-weight: 600; }
+        .folder-item.drop-target { outline: 2px dashed #1d4ed8; background: #eff6ff; }
+        .folder-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+        .folder-list, .run-list {
+            display: flex; flex-direction: column; gap: 4px;
+            max-height: 200px; overflow: auto;
+        }
+        .run-meta { color: #64748b; font-size: 0.78rem; margin-top: 2px; }
+        .run-item-inner { display: flex; align-items: flex-start; gap: 8px; }
+        .run-select-cb { margin-top: 2px; }
+        .explorer-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .explorer-empty { color: #94a3b8; font-size: 0.85rem; padding: 6px 0; }
+        details > summary {
+            cursor: pointer; user-select: none; padding: 6px 10px;
+            background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px;
+            font-weight: 600; font-size: 0.92rem; color: #1e293b;
+            list-style: none; display: flex; align-items: center; gap: 6px;
+        }
+        details > summary::-webkit-details-marker { display: none; }
+        details > summary::before { content: "▶"; font-size: 0.7rem; transition: transform 0.15s; }
+        details[open] > summary::before { transform: rotate(90deg); }
+        details { margin-bottom: 10px; }
+        .current-file-row > form, .current-files-actions > form, .session-chromatic-row > form {
+            background: transparent; border: 0; box-shadow: none; padding: 0; margin: 0;
+        }
+        .move-folder-popover {
+            position: absolute; top: 100%; left: 0; background: #1e293b; border-radius: 8px;
+            padding: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.3); z-index: 100;
+            display: flex; gap: 6px; align-items: center;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="site-nav">
+    <div class="site-nav-brand">Plate Overview</div>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:12px;">
+        {% if upload_set_id %}
+        {% set _current_run = saved_runs | selectattr('id', 'equalto', upload_set_id) | first | default(none) %}
+        {% set _run_label = _current_run.run_name if (_current_run and _current_run.run_name) else (current_files[0] if current_files else 'Unsaved file') %}
+        <span class="nav-run-pill" title="{{ _run_label }}">{{ _run_label | truncate(40, true, '…') }}</span>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="site-body">
+
+{% if saved_runs and saved_runs|length > 0 %}
+<details>
+    <summary>Saved files ({{ saved_runs|length }})</summary>
+    <div style="padding:8px; border:1px solid #e2e8f0; border-radius:0 0 10px 10px; border-top:none; background:#f8fafc; margin-bottom:2px;">
+    <form id="saved-run-form" action="/runs/select" method="post" style="margin-top:4px;">
+        <input type="hidden" id="run-id-input" name="run_id" value="">
+        <input type="hidden" id="run-name-input" name="run_name" value="">
+        <input type="hidden" id="folder-name-input" name="folder_name" value="">
+        <input type="hidden" id="run-ids-json-input" name="run_ids_json" value="">
+        <div class="runs-explorer">
+            <div class="folders-pane">
+                <div class="pane-title">Folders</div>
+                <div id="folder-list" class="folder-list"></div>
+            </div>
+            <div class="runs-pane">
+                <div class="pane-title" id="runs-pane-title">Files</div>
+                <div id="run-list" class="run-list"></div>
+                <div class="explorer-actions" style="position:relative;">
+                    <button type="submit" id="load-run-btn" style="background:#0f766e;">Load file</button>
+                    <button type="button" id="rename-run-btn" style="background:#475569;">Rename</button>
+                    <button type="button" id="delete-run-btn" style="background:#b91c1c;">Delete</button>
+                    <button type="button" id="delete-selected-runs-btn" style="background:#991b1b;">Delete selected</button>
+                    <button type="button" id="move-folder-btn" style="background:#334155;">Move to folder</button>
+                    <button type="button" id="new-folder-btn" style="background:#1e293b;">New folder</button>
+                    <div id="move-folder-popover" class="move-folder-popover" hidden>
+                        <select id="move-folder-select" style="min-width:150px;"></select>
+                        <button type="button" id="move-folder-apply-btn" style="background:#334155;">Move</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+    </div>
+</details>
+{% endif %}
+
+{% if current_files and current_files|length > 0 %}
+<details open>
+    <summary>Current files ({{ current_files|length }})</summary>
+    <div class="current-files-panel">
+    <ul class="current-file-list">
+        {% for filename in current_files %}
+        <li class="current-file-row">
+            <span class="current-file-name">{{ filename }}</span>
+            {% if upload_is_fresh %}
+            <form action="/files/remove" method="post" style="margin:0;">
+                <input type="hidden" name="upload_set_id" value="{{ upload_set_id or '' }}">
+                <input type="hidden" name="file_index" value="{{ loop.index0 }}">
+                <button type="submit" class="file-remove-btn">Remove</button>
+            </form>
+            {% endif %}
+        </li>
+        {% endfor %}
+    </ul>
+    {% if available_chromatics and available_chromatics|length > 1 and upload_set_id %}
+    <details style="margin-bottom:10px;">
+        <summary>Chromatic options</summary>
+        <div class="session-chromatic-row" style="margin-top:8px;">
+            <form action="/files/set_chromatic" method="post" style="margin:0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <input type="hidden" name="upload_set_id" value="{{ upload_set_id }}">
+                <label for="session-chromatic-select" style="font-size:0.84rem; color:#334155;">Session chromatic</label>
+                <select id="session-chromatic-select" name="chromatic">
+                    {% for c in available_chromatics %}
+                    <option value="{{ c }}" {% if current_selected_chromatic == c %}selected{% endif %}>Chromatic {{ c }}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit" style="background:#1d4ed8;">Use in this session</button>
+            </form>
+            <button type="button" id="session-chromatic-overview-btn" data-upload-set-id="{{ upload_set_id }}" style="background:#334155;">Open chromatic overview</button>
+        </div>
+    </details>
+    {% endif %}
+    <div class="current-files-actions">
+        <form action="/files/clear" method="post" style="margin:0;">
+            <input type="hidden" name="upload_set_id" value="{{ upload_set_id or '' }}">
+            <button type="submit" class="file-clear-all-btn">Clear all files</button>
+        </form>
+    </div>
+    </div>
+</details>
+{% endif %}
+
+<form id="main-analyze-form" action="/analyze" method="post" enctype="multipart/form-data">
+    <input type="hidden" name="upload_set_id" value="{{ upload_set_id or '' }}">
+    <input type="hidden" id="forced-chromatic" name="force_chromatic" value="">
+    <input type="hidden" id="keep-only-chromatic" name="keep_only_chromatic" value="">
+    <label for="time-unit">Time unit</label>
+    <select id="time-unit" name="time_unit">
+        <option value="hours" {% if current_time_unit == 'hours' %}selected{% endif %}>Hours</option>
+        <option value="minutes" {% if current_time_unit == 'minutes' %}selected{% endif %}>Minutes</option>
+        <option value="seconds" {% if current_time_unit == 'seconds' %}selected{% endif %}>Seconds</option>
+    </select>
+    {% if not (current_files and current_files|length > 0) %}
+    <label for="upload-format">File format</label>
+    <select id="upload-format" name="upload_format">
+        <option value="auto" selected>Auto-detect (recommended)</option>
+        <option value="csv">CSV (already readable)</option>
+        <option value="dat">DAT (convert to CSV)</option>
+    </select>
+    <div id="file-inputs">
+        <input type="file" name="files" accept=".csv,.dat" {% if not current_files %}required{% endif %}>
+    </div>
+    <p style="margin:6px 0 10px 2px; font-size:0.82rem; color:#64748b;">
+        For best merge accuracy, upload files in chronological order.
+        Names like <code>file1</code>, <code>file2</code> are only a backup check.
+    </p>
+    <button type="button" id="add-file-btn" style="background:#475569;">Add file</button>
+    <button type="submit" formaction="/upload/save_only" id="save-file-btn" style="background:#0f766e;display:none;">Save</button>
+    {% endif %}
+
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+        <button type="button" id="open-plate-overview-btn" style="background:#0f172a;">Open plate overview</button>
+        <button type="submit" formaction="/upload/save_only" style="background:#0f766e;">Save file</button>
+    </div>
+</form>
+
+{% include '_plate_overview.html' %}
+{% include '_chromatic_picker.html' %}
+
+<script>
+(function() {
+    // ── Add file button ───────────────────────────────────────────────────────
+    const addFileBtn = document.getElementById("add-file-btn");
+    const fileInputs = document.getElementById("file-inputs");
+    if (addFileBtn && fileInputs) {
+        addFileBtn.addEventListener("click", function() {
+            const inp = document.createElement("input");
+            inp.type = "file"; inp.name = "files"; inp.accept = ".csv,.dat";
+            fileInputs.appendChild(inp);
+        });
+    }
+
+    // ── Saved runs explorer ───────────────────────────────────────────────────
+    const savedRuns = {{ saved_runs | tojson }};
+    const savedFolders = {{ saved_folders | tojson }};
+    const folderPolicies = {{ folder_policies | tojson }};
+    const currentUploadSetId = {{ (upload_set_id or '') | tojson }};
+
+    const folderListEl = document.getElementById("folder-list");
+    const runListEl    = document.getElementById("run-list");
+    const runsPaneTitleEl = document.getElementById("runs-pane-title");
+    const runIdInput   = document.getElementById("run-id-input");
+    const runNameInput = document.getElementById("run-name-input");
+    const folderNameInput = document.getElementById("folder-name-input");
+    const runIdsJsonInput = document.getElementById("run-ids-json-input");
+    const savedRunForm = document.getElementById("saved-run-form");
+    const moveFolderPopover = document.getElementById("move-folder-popover");
+    const moveFolderSelect = document.getElementById("move-folder-select");
+
+    if (!folderListEl || !runListEl) return;
+
+    let activeFolder = null; // null = "All runs"
+    let selectedRunId = null;
+    let selectedRunIds = new Set();
+    let dragRunId = null;
+
+    function getAllFolders() {
+        const names = new Set(savedRuns.map(r => (r.folder_name || "").trim()).filter(Boolean));
+        savedFolders.forEach(f => names.add(f));
+        return ["", ...Array.from(names).sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))];
+    }
+
+    function runsForFolder(folder) {
+        if (folder === null) return savedRuns;
+        if (folder === "") return savedRuns.filter(r => !(r.folder_name || "").trim());
+        return savedRuns.filter(r => (r.folder_name || "").trim() === folder);
+    }
+
+    function renderFolders() {
+        if (!folderListEl) return;
+        folderListEl.innerHTML = "";
+        const folders = getAllFolders();
+        // "All runs" entry
+        const allEl = document.createElement("div");
+        allEl.className = "folder-item" + (activeFolder === null ? " active" : "");
+        allEl.textContent = `All files (${savedRuns.length})`;
+        allEl.addEventListener("click", () => { activeFolder = null; selectedRunId = null; selectedRunIds = new Set(); renderFolders(); renderRuns(); });
+        folderListEl.appendChild(allEl);
+
+        folders.forEach(folder => {
+            const label = folder === "" ? "(no folder)" : folder;
+            const count = runsForFolder(folder).length;
+            const row = document.createElement("div");
+            row.className = "folder-row";
+            const el = document.createElement("div");
+            el.className = "folder-item" + (activeFolder === folder ? " active" : "");
+            el.textContent = `${label} (${count})`;
+            el.style.flex = "1";
+            el.dataset.folder = folder;
+            el.addEventListener("click", () => { activeFolder = folder; selectedRunId = null; selectedRunIds = new Set(); renderFolders(); renderRuns(); });
+            el.addEventListener("dragover", e => { e.preventDefault(); el.classList.add("drop-target"); });
+            el.addEventListener("dragleave", () => el.classList.remove("drop-target"));
+            el.addEventListener("drop", e => {
+                e.preventDefault(); el.classList.remove("drop-target");
+                if (dragRunId) doMoveRunToFolder(dragRunId, folder);
+            });
+            row.appendChild(el);
+            folderListEl.appendChild(row);
+        });
+    }
+
+    function renderRuns() {
+        if (!runListEl) return;
+        runListEl.innerHTML = "";
+        const runs = runsForFolder(activeFolder);
+        if (runs.length === 0) {
+            const empty = document.createElement("div");
+            empty.className = "explorer-empty";
+            empty.textContent = "No files in this folder.";
+            runListEl.appendChild(empty);
+            if (runsPaneTitleEl) runsPaneTitleEl.textContent = "Files";
+            return;
+        }
+        if (runsPaneTitleEl) {
+            const label = activeFolder === null ? "All files" : (activeFolder === "" ? "(no folder)" : activeFolder);
+            runsPaneTitleEl.textContent = `${label} (${runs.length})`;
+        }
+        runs.forEach(run => {
+            const item = document.createElement("div");
+            item.className = "run-item" + (run.id === selectedRunId ? " active" : "");
+            item.draggable = true;
+            item.dataset.runId = run.id;
+            const inner = document.createElement("div");
+            inner.className = "run-item-inner";
+            const cb = document.createElement("input");
+            cb.type = "checkbox"; cb.className = "run-select-cb";
+            cb.checked = selectedRunIds.has(run.id);
+            cb.addEventListener("change", e => {
+                e.stopPropagation();
+                if (cb.checked) selectedRunIds.add(run.id); else selectedRunIds.delete(run.id);
+            });
+            const text = document.createElement("div");
+            text.style.flex = "1";
+            const label = run.run_name || run.label || run.id;
+            const date = run.created_at ? run.created_at.substring(0, 10) : "";
+            text.innerHTML = `<div>${label}${run.id === currentUploadSetId ? ' <span style="font-size:0.72rem;color:#059669;">(active)</span>' : ''}</div><div class="run-meta">${date}</div>`;
+            inner.appendChild(cb);
+            inner.appendChild(text);
+            item.appendChild(inner);
+            item.addEventListener("click", e => {
+                if (e.target === cb) return;
+                selectedRunId = run.id;
+                renderRuns();
+            });
+            item.addEventListener("dblclick", () => {
+                if (runIdInput) runIdInput.value = run.id;
+                if (savedRunForm) { savedRunForm.action = "/runs/select"; savedRunForm.submit(); }
+            });
+            item.addEventListener("dragstart", () => { dragRunId = run.id; });
+            runListEl.appendChild(item);
+        });
+    }
+
+    function doMoveRunToFolder(runId, folder) {
+        const form = document.createElement("form");
+        form.method = "POST"; form.action = "/runs/folder"; form.style.display = "none";
+        const ri = document.createElement("input"); ri.type = "hidden"; ri.name = "run_id"; ri.value = runId;
+        const fi = document.createElement("input"); fi.type = "hidden"; fi.name = "folder_name"; fi.value = folder;
+        form.appendChild(ri); form.appendChild(fi);
+        document.body.appendChild(form); form.submit();
+    }
+
+    renderFolders();
+    renderRuns();
+
+    // Load run
+    const loadRunBtn = document.getElementById("load-run-btn");
+    if (loadRunBtn) {
+        loadRunBtn.addEventListener("click", function(e) {
+            e.preventDefault();
+            if (!selectedRunId) { alert("Select a run first."); return; }
+            if (runIdInput) runIdInput.value = selectedRunId;
+            if (savedRunForm) { savedRunForm.action = "/runs/select"; savedRunForm.submit(); }
+        });
+    }
+
+    // Rename run
+    const renameRunBtn = document.getElementById("rename-run-btn");
+    if (renameRunBtn) {
+        renameRunBtn.addEventListener("click", function() {
+            if (!selectedRunId) { alert("Select a run first."); return; }
+            const run = savedRuns.find(r => r.id === selectedRunId);
+            const oldName = run ? (run.run_name || run.label || "") : "";
+            const newName = window.prompt("New run name:", oldName);
+            if (newName === null) return;
+            if (runIdInput) runIdInput.value = selectedRunId;
+            if (runNameInput) runNameInput.value = newName;
+            if (savedRunForm) { savedRunForm.action = "/runs/rename"; savedRunForm.submit(); }
+        });
+    }
+
+    // Delete single run
+    const deleteRunBtn = document.getElementById("delete-run-btn");
+    if (deleteRunBtn) {
+        deleteRunBtn.addEventListener("click", function() {
+            if (!selectedRunId) { alert("Select a run first."); return; }
+            if (!confirm("Delete this run?")) return;
+            if (runIdInput) runIdInput.value = selectedRunId;
+            if (savedRunForm) { savedRunForm.action = "/runs/delete"; savedRunForm.submit(); }
+        });
+    }
+
+    // Delete selected runs
+    const deleteSelectedBtn = document.getElementById("delete-selected-runs-btn");
+    if (deleteSelectedBtn) {
+        deleteSelectedBtn.addEventListener("click", function() {
+            const ids = Array.from(selectedRunIds);
+            if (ids.length === 0) { alert("Select at least one run using the checkboxes."); return; }
+            if (!confirm(`Delete ${ids.length} run(s)?`)) return;
+            if (runIdsJsonInput) runIdsJsonInput.value = JSON.stringify(ids);
+            if (savedRunForm) { savedRunForm.action = "/runs/bulk_delete"; savedRunForm.submit(); }
+        });
+    }
+
+    // Move to folder
+    const moveFolderBtn = document.getElementById("move-folder-btn");
+    if (moveFolderBtn && moveFolderPopover) {
+        moveFolderBtn.addEventListener("click", function() {
+            moveFolderPopover.hidden = !moveFolderPopover.hidden;
+            if (!moveFolderPopover.hidden && moveFolderSelect) {
+                moveFolderSelect.innerHTML = '<option value="">(no folder)</option>';
+                getAllFolders().filter(f => f !== "").forEach(f => {
+                    const opt = document.createElement("option"); opt.value = f; opt.textContent = f;
+                    moveFolderSelect.appendChild(opt);
+                });
+            }
+        });
+    }
+    const moveFolderApplyBtn = document.getElementById("move-folder-apply-btn");
+    if (moveFolderApplyBtn) {
+        moveFolderApplyBtn.addEventListener("click", function() {
+            if (!selectedRunId) { alert("Select a run first."); return; }
+            const folder = moveFolderSelect ? moveFolderSelect.value : "";
+            doMoveRunToFolder(selectedRunId, folder);
+        });
+    }
+
+    // New folder
+    const newFolderBtn = document.getElementById("new-folder-btn");
+    if (newFolderBtn) {
+        newFolderBtn.addEventListener("click", function() {
+            if (!selectedRunId) { alert("Select a run first."); return; }
+            const name = window.prompt("New folder name:");
+            if (!name) return;
+            doMoveRunToFolder(selectedRunId, name.trim());
+        });
+    }
+
+    // ── Plate overview trigger from upload ────────────────────────────────────
+    const openPoBtn = document.getElementById("open-plate-overview-btn");
+    if (openPoBtn) {
+        openPoBtn.addEventListener("click", function() {
+            // Trigger plate overview by submitting the main form to /analyze
+            // (which sets upload_is_fresh) then the plate overview auto-opens.
+            // If there's already a current upload set, directly open the modal.
+            const form = document.getElementById("main-analyze-form");
+            if (!form) return;
+            const hasFiles = Array.from(form.querySelectorAll('input[type="file"]')).some(f => f.files && f.files.length > 0);
+            if (hasFiles) {
+                form.action = "/analyze";
+                form.submit();
+            } else {
+                // No new files — open plate overview modal directly for current session
+                if (typeof openPlateOverview === "function") openPlateOverview();
+            }
+        });
+    }
+
+    // Auto-open plate overview when upload_is_fresh
+    {% if upload_is_fresh %}
+    window.addEventListener("load", function() {
+        if (typeof openPlateOverview === "function") {
+            setTimeout(openPlateOverview, 100);
+        }
+    });
+    {% endif %}
+})();
+</script>
+
+</div>
+</body>
+</html>
