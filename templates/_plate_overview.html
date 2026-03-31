@@ -198,6 +198,19 @@
         }
         #po-plot-fab-btn:hover { background: #0d6460; }
         #po-group-plots-menu button:hover { background: #f1f5f9 !important; }
+        /* ── GvG wizard ──────────────────────────────────────────────────── */
+        .po-gvg-wizard {
+            display: none; padding: 10px 14px; background: #f0fdf4;
+            border: 2px solid #16a34a; border-radius: 10px; margin-bottom: 10px;
+            flex-direction: column; gap: 8px;
+        }
+        .po-gvg-wizard.active { display: flex; }
+        .po-cell[data-gvg="in"] { box-shadow: inset 0 0 0 3px #16a34a !important; }
+        .po-gvg-summary {
+            display: none; padding: 10px 12px; background: #dcfce7; border: 1px solid #86efac;
+            border-radius: 8px; font-size: 0.82rem; color: #14532d; margin-bottom: 8px; line-height: 1.4;
+        }
+        .po-gvg-summary.show { display: block; }
         #po-plot-opts-panel {
             display: none;
             background: #fff;
@@ -707,6 +720,10 @@
         let poGvcExcludedWells = new Set();
         let poGvcExcludeMode = false;
         let poGvcShowInfo = false;
+        let poGvgStep = 0;          // 0=off 1=configure plots 2=options
+        let poGvgPlots = [];        // [{name, groups:[group_names]}]
+        let poGvgCurrentIdx = 0;    // which plot is being configured
+        let poGvgShowInfo = false;
 
         // ── Multi-tab state ──────────────────────────────────────────────────
         let poTabs = [];       // [{label, data, groups, features, activeFeature}]
@@ -910,6 +927,7 @@
             poSelection = new Set();
             poDrawMode = false;
             poGvcStep = 0; poGvcControlWells.clear(); poGvcSelectedGroups = [];
+            poGvgStep = 0; poGvgPlots = [];
             poRenderGroupLegend();
         }
 
@@ -1221,6 +1239,15 @@
                     <div id="po-gvc-summary" class="po-gvc-summary"></div>
                     <div id="po-gvc-instr" class="po-gvc-instr"></div>
                     <div id="po-gvc-btns"></div>
+                </div>
+                <div id="po-gvg-wizard" class="po-gvg-wizard">
+                    <div class="po-gvc-step-bar">
+                        <div id="po-gvg-s1" class="po-gvc-step">1. Configure plots</div>
+                        <div id="po-gvg-s2" class="po-gvc-step">2. Options &amp; generate</div>
+                    </div>
+                    <div id="po-gvg-summary" class="po-gvg-summary"></div>
+                    <div id="po-gvg-instr" class="po-gvc-instr"></div>
+                    <div id="po-gvg-btns"></div>
                 </div>
                 <div class="po-grid-wrap">
                 <table class="po-grid-table" id="po-grid-table">
@@ -1534,6 +1561,7 @@
                     }
                 });
                 poGvcUpdateCellVisuals();
+                poGvgUpdateCellVisuals();
             }
             if (normalizedCb) normalizedCb.addEventListener("change", reRenderAllCells);
 
@@ -1694,12 +1722,171 @@
                 if (!Object.keys(poGroups).some(g => (poGroups[g]||[]).length > 0)) {
                     window.alert("Assign wells to groups first before using groups vs control."); return;
                 }
+                poGvgCancel();  // close GvG if open
                 poGvcStep = 1; poGvcControlWells.clear(); poGvcSelectedGroups = [];
                 const wizard = document.getElementById("po-gvc-wizard");
                 if (wizard) wizard.classList.add("active");
                 poGvcRenderWizard(); poGvcUpdateCellVisuals();
             }
             // ── End GvC wizard ───────────────────────────────────────────────
+
+            // ── GvG wizard functions ─────────────────────────────────────────
+            function poGvgUpdateCellVisuals() {
+                if (!gridTable) return;
+                gridTable.querySelectorAll(".po-cell[data-well]").forEach(cell => {
+                    const well = cell.dataset.well;
+                    const badge = cell.querySelector(".po-cell-gvc-badge");
+                    cell.removeAttribute("data-gvg");
+                    if (poGvgStep === 0) return;
+                    if (!data.all_wells.includes(well)) return;
+                    const currentGroups = poGvgPlots[poGvgCurrentIdx]?.groups || [];
+                    const grpName = poGetGroupForWell(well);
+                    if (!grpName) return;
+                    const grpIdx = currentGroups.indexOf(grpName);
+                    if (grpIdx >= 0) {
+                        cell.setAttribute("data-gvg", "in");
+                        if (badge && poGvcStep === 0) {
+                            badge.style.display = "";
+                            badge.textContent = `G${grpIdx + 1}`;
+                            badge.style.color = "#16a34a";
+                        }
+                    } else if (badge && poGvcStep === 0) {
+                        badge.style.display = "none";
+                        badge.textContent = "";
+                    }
+                });
+            }
+
+            function poGvgRefreshSummary() {
+                const summaryEl = document.getElementById("po-gvg-summary");
+                if (!summaryEl) return;
+                summaryEl.classList.toggle("show", poGvgShowInfo);
+                if (poGvgShowInfo) {
+                    const lines = poGvgPlots.map((p, i) => {
+                        const active = i === poGvgCurrentIdx ? " ◀" : "";
+                        return `<strong>Plot ${i+1} — ${p.name}</strong>: ${p.groups.join(", ") || "none"}${active}`;
+                    });
+                    summaryEl.innerHTML = lines.join("<br>");
+                }
+            }
+
+            function poGvgRenderWizard() {
+                const wizard = document.getElementById("po-gvg-wizard");
+                if (!wizard) return;
+                [1, 2].forEach(n => {
+                    const el = document.getElementById(`po-gvg-s${n}`);
+                    if (el) el.className = "po-gvc-step" + (n === poGvgStep ? " gvc-active" : (n < poGvgStep ? " gvc-done" : ""));
+                });
+                poGvgRefreshSummary();
+                const instrEl = document.getElementById("po-gvg-instr");
+                const btnsEl  = document.getElementById("po-gvg-btns");
+                if (!instrEl || !btnsEl) return;
+
+                const allGroupNames = Object.keys(poGroups).filter(g => (poGroups[g]||[]).length > 0);
+                const currentPlot = poGvgPlots[poGvgCurrentIdx] || { name: "", groups: [] };
+                const totalPlots  = poGvgPlots.length;
+
+                if (poGvgStep === 1) {
+                    const nameVal = (currentPlot.name || "").replace(/"/g, "&quot;");
+                    instrEl.innerHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span style="font-size:0.83rem;color:#14532d;font-weight:600;">Plot ${poGvgCurrentIdx+1} of ${totalPlots}</span>
+                        <input type="text" id="po-gvg-name-input" value="${nameVal}" placeholder="Plot name" style="font-size:0.8rem;padding:2px 7px;border:1px solid #86efac;border-radius:5px;background:#fff;width:120px;max-width:none;box-shadow:none;">
+                        <button type="button" id="po-gvg-info-toggle" style="background:#6366f1;font-size:0.75rem;padding:2px 8px;margin:0;">${poGvgShowInfo?'Hide Info':'Show Info'}</button>
+                    </div>`;
+                    document.getElementById("po-gvg-name-input")?.addEventListener("input", function() {
+                        if (poGvgPlots[poGvgCurrentIdx]) poGvgPlots[poGvgCurrentIdx].name = this.value || ("Plot " + (poGvgCurrentIdx + 1));
+                    });
+                    document.getElementById("po-gvg-info-toggle")?.addEventListener("click", () => { poGvgShowInfo = !poGvgShowInfo; poGvgRenderWizard(); });
+
+                    const grpCount = currentPlot.groups.length;
+                    let btnHtml = `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                        <span class="po-gvc-count" id="po-gvg-grp-count">${grpCount} group${grpCount!==1?"s":""} selected</span>`;
+                    if (poGvgCurrentIdx > 0)             btnHtml += `<button type="button" id="po-gvg-prev" style="background:#64748b;font-size:0.82rem;padding:4px 10px;">← Plot ${poGvgCurrentIdx}</button>`;
+                    if (poGvgCurrentIdx < totalPlots - 1) btnHtml += `<button type="button" id="po-gvg-next" style="background:#16a34a;font-size:0.82rem;padding:4px 10px;">Plot ${poGvgCurrentIdx+2} →</button>`;
+                    if (totalPlots < 10)                  btnHtml += `<button type="button" id="po-gvg-addplot" style="background:#0369a1;font-size:0.82rem;padding:4px 10px;">+ Add plot</button>`;
+                    btnHtml += `<button type="button" id="po-gvg-toopts" style="background:#7c3aed;font-size:0.82rem;padding:4px 12px;">Options →</button>
+                        <button type="button" id="po-gvg-cancel1" style="background:#475569;font-size:0.82rem;padding:4px 10px;">Cancel</button>
+                    </div>`;
+                    btnsEl.innerHTML = btnHtml;
+
+                    document.getElementById("po-gvg-prev")?.addEventListener("click", function() {
+                        poGvgCurrentIdx--; poGvgRenderWizard(); poGvgUpdateCellVisuals();
+                    });
+                    document.getElementById("po-gvg-next")?.addEventListener("click", function() {
+                        poGvgCurrentIdx++; poGvgRenderWizard(); poGvgUpdateCellVisuals();
+                    });
+                    document.getElementById("po-gvg-addplot")?.addEventListener("click", function() {
+                        const newIdx = poGvgPlots.length;
+                        poGvgPlots.push({ name: "Plot " + (newIdx + 1), groups: allGroupNames.slice() });
+                        poGvgCurrentIdx = newIdx;
+                        poGvgRenderWizard(); poGvgUpdateCellVisuals();
+                    });
+                    document.getElementById("po-gvg-toopts")?.addEventListener("click", function() {
+                        if (!poGvgPlots.some(p => p.groups.length > 0)) {
+                            window.alert("Select at least one group for at least one plot."); return;
+                        }
+                        poGvgStep = 2; poGvgRenderWizard(); poGvgUpdateCellVisuals();
+                    });
+                    document.getElementById("po-gvg-cancel1")?.addEventListener("click", poGvgCancel);
+
+                } else if (poGvgStep === 2) {
+                    instrEl.innerHTML = `<span style="font-size:0.83rem;color:#14532d;font-weight:600;">Configure plot options and generate results.</span>`;
+                    btnsEl.innerHTML = `
+                        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+                            <span style="font-size:0.8rem;font-weight:700;color:#334155;">Plot:</span>
+                            <label style="font-size:0.82rem;display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="po-gvg-norm" value="raw" checked> Raw</label>
+                            <label style="font-size:0.82rem;display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="po-gvg-norm" value="normalized"> Normalized</label>
+                            <label style="font-size:0.82rem;display:inline-flex;align-items:center;gap:4px;cursor:pointer;"><input type="radio" name="po-gvg-norm" value="both"> Both</label>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+                            <button type="button" id="po-gvg-back2" style="background:#64748b;font-size:0.82rem;padding:4px 10px;">← Back</button>
+                            <button type="button" id="po-gvg-generate" style="background:#16a34a;font-size:0.82rem;padding:4px 14px;">Generate plots →</button>
+                            <button type="button" id="po-gvg-cancel2" style="background:#475569;font-size:0.82rem;padding:4px 10px;">Cancel</button>
+                        </div>`;
+                    document.getElementById("po-gvg-back2")?.addEventListener("click", function() {
+                        poGvgStep = 1; poGvgCurrentIdx = poGvgPlots.length - 1;
+                        poGvgRenderWizard(); poGvgUpdateCellVisuals();
+                    });
+                    document.getElementById("po-gvg-cancel2")?.addEventListener("click", poGvgCancel);
+                    document.getElementById("po-gvg-generate")?.addEventListener("click", function() {
+                        const normSetting = document.querySelector('input[name="po-gvg-norm"]:checked')?.value || "raw";
+                        const validPlots  = poGvgPlots.filter(p => p.groups.length > 0);
+                        const form = document.createElement("form");
+                        form.method = "POST";
+                        form.action = "/plot/group_vs_group/render";
+                        form.target = "_blank";
+                        const add = (n,v) => { const i=document.createElement("input"); i.type="hidden"; i.name=n; i.value=v; form.appendChild(i); };
+                        add("dataset_id", data.plate_session_id);
+                        add("norm_setting", normSetting);
+                        add("plots_json", JSON.stringify(validPlots));
+                        document.body.appendChild(form); form.submit(); document.body.removeChild(form);
+                    });
+                }
+            }
+
+            function poGvgCancel() {
+                poGvgStep = 0; poGvgPlots = []; poGvgCurrentIdx = 0; poGvgShowInfo = false;
+                const wizard = document.getElementById("po-gvg-wizard");
+                if (wizard) wizard.classList.remove("active");
+                poGvgUpdateCellVisuals();
+            }
+
+            function startGvgWizard() {
+                if (poDrawMode) { window.alert("Turn off grouping mode first."); return; }
+                const allGroupNames = Object.keys(poGroups).filter(g => (poGroups[g]||[]).length > 0);
+                if (!allGroupNames.length) {
+                    window.alert("Assign wells to groups first before using groups vs group."); return;
+                }
+                poGvcCancel();  // close GvC if open
+                poGvgStep = 1;
+                poGvgPlots = [{ name: "Plot 1", groups: allGroupNames.slice() }];
+                poGvgCurrentIdx = 0;
+                poGvgShowInfo = false;
+                const wizard = document.getElementById("po-gvg-wizard");
+                if (wizard) wizard.classList.add("active");
+                poGvgRenderWizard(); poGvgUpdateCellVisuals();
+            }
+            // ── End GvG wizard ───────────────────────────────────────────────
 
             // ── Summary Sidebar Logic Hook ────────────────────────────────────
             // Hook into existing render functions to keep summary fresh if open
@@ -1997,6 +2184,22 @@
                         return;
                     }
                     if (poGvcStep === 3) return;
+                    // GvG wizard intercepts clicks in step 1
+                    if (poGvgStep === 1) {
+                        const grpName = poGetGroupForWell(well);
+                        if (!grpName) return;
+                        const currentGroups = poGvgPlots[poGvgCurrentIdx]?.groups;
+                        if (!currentGroups) return;
+                        const idx = currentGroups.indexOf(grpName);
+                        if (idx >= 0) currentGroups.splice(idx, 1);
+                        else currentGroups.push(grpName);
+                        poGvgUpdateCellVisuals();
+                        const ct = document.getElementById("po-gvg-grp-count");
+                        if (ct) ct.textContent = `${currentGroups.length} group${currentGroups.length!==1?"s":""} selected`;
+                        if (poGvgShowInfo) poGvgRefreshSummary();
+                        return;
+                    }
+                    if (poGvgStep === 2) return;
                     if (poActionMode) {
                         if (poSelection.has(well)) {
                             poSelection.delete(well);
@@ -2192,18 +2395,7 @@
             document.getElementById("po-act-gvg")?.addEventListener("click", function() {
                 const menu = document.getElementById("po-group-plots-menu");
                 if (menu) menu.style.display = "none";
-                if (poDrawMode) { window.alert("Turn off grouping mode first."); return; }
-                if (!Object.keys(poGroups).some(g => (poGroups[g] || []).length > 0)) {
-                    window.alert("Assign wells to groups first before using groups vs group."); return;
-                }
-                const form = document.createElement("form");
-                form.method = "POST";
-                form.action = "/plot/group_vs_group/start";
-                form.target = "_blank";
-                const inp = document.createElement("input");
-                inp.type = "hidden"; inp.name = "plate_session_id"; inp.value = data.plate_session_id;
-                form.appendChild(inp);
-                document.body.appendChild(form); form.submit(); document.body.removeChild(form);
+                startGvgWizard();
             });
         }
 
