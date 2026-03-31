@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Plot groups vs groups</title>
+    <style>
+        /* ── Tab bar ───────────────────────────────────────────────────── */
+        .plot-tab-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 12px;
+            align-items: center;
+        }
+        .plot-tab-btn {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            border-radius: 7px 7px 0 0;
+            padding: 6px 12px;
+            font-size: 0.84rem;
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin: 0;
+            box-shadow: none;
+        }
+        .plot-tab-btn:hover { background: #e2e8f0; }
+        .plot-tab-btn.active {
+            background: #7c3aed;
+            color: #fff;
+            border-color: #7c3aed;
+        }
+        .plot-tab-btn.active:hover { background: #6d28d9; }
+        .tab-remove {
+            font-size: 0.9rem;
+            line-height: 1;
+            opacity: 0.7;
+            cursor: pointer;
+            padding: 0 2px;
+            border-radius: 3px;
+        }
+        .tab-remove:hover { opacity: 1; background: rgba(0,0,0,0.12); }
+        #add-plot-btn {
+            background: #e0f2fe;
+            border: 1px dashed #38bdf8;
+            color: #0369a1;
+            border-radius: 7px;
+            padding: 6px 12px;
+            font-size: 0.84rem;
+            cursor: pointer;
+            margin: 0;
+            box-shadow: none;
+        }
+        #add-plot-btn:hover { background: #bae6fd; }
+        /* ── Plot panel ────────────────────────────────────────────────── */
+        .plot-panel {
+            border: 1px solid #e5e7eb;
+            border-radius: 0 8px 8px 8px;
+            background: #faf5ff;
+            padding: 12px 14px;
+            margin-bottom: 14px;
+        }
+        .plot-name-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .plot-name-row label { font-weight: 600; font-size: 0.86rem; color: #4b0082; }
+        .plot-name-row input[type="text"] {
+            max-width: 260px;
+            border-color: #c4b5fd;
+        }
+        .plot-name-row input[type="text"]:focus { border-color: #7c3aed; }
+        /* ── Group picker (reused from GvC) ────────────────────────────── */
+        .group-source-well {
+            position: relative;
+            border: 1px solid #cbd5e1;
+            background: #fff;
+            color: #1f2937;
+            border-radius: 7px;
+            padding: 5px 8px;
+            margin: 2px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            min-width: 42px;
+        }
+        .group-source-well.well-picked {
+            background: #dbeafe;
+            border-color: #2563eb;
+            color: #1d4ed8;
+            font-weight: 700;
+        }
+        .group-source-well.well-no-group {
+            background: #f8fafc;
+            color: #9ca3af;
+            border-style: dashed;
+        }
+        .well-grid { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+        .group-row {
+            display:flex; align-items:center; gap:8px;
+            padding:8px 10px; border:1px solid #e5e7eb;
+            border-radius:8px; background:#fff; margin-bottom:6px;
+        }
+        .group-row .move-btn {
+            background:#e5e7eb; color:#374151; border:none;
+            border-radius:4px; padding:2px 7px; cursor:pointer; font-size:0.8rem;
+        }
+        .group-row .move-btn:hover { background:#d1d5db; }
+        /* ── Summary ───────────────────────────────────────────────────── */
+        .summary-box {
+            display: none;
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            background: #f1f5f9;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            font-size: 0.92rem;
+            color: #334155;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <h1>Plot groups vs groups</h1>
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+        <p style="margin:0;">Files merged: {{ n_files }} &nbsp;|&nbsp; Chromatic: {{ chromatic }} &nbsp;|&nbsp; Time unit: {{ time_unit_suffix }}</p>
+        <button type="button" id="toggle-info-btn" style="background:#6366f1; margin:0; padding:6px 12px; font-size:0.85rem;">Show Info</button>
+    </div>
+
+    <div id="selection-summary" class="summary-box"></div>
+
+    {# ── Plot tabs ── #}
+    <div id="plot-tab-bar" class="plot-tab-bar"></div>
+
+    {# ── Active plot panel ── #}
+    <div class="plot-panel">
+        <div class="plot-name-row">
+            <label for="plot-name-input">Plot name:</label>
+            <input type="text" id="plot-name-input" placeholder="e.g. Treatment A">
+        </div>
+
+        {# ── Group picker ── #}
+        <details open style="margin-bottom:10px;">
+            <summary style="cursor:pointer; display:inline-block; border:1px solid #cbd5e1; border-radius:8px; padding:6px 10px; background:#f8fafc; font-weight:600;">
+                Choose groups by clicking wells
+            </summary>
+            <p style="font-size:0.85rem; color:#6b7280; margin:6px 0 4px;">Click wells to toggle groups for this plot. Use checkboxes for direct control.</p>
+
+            {% set grouped_wells = [] %}
+            {% for gname, gwells in groups.items() %}
+                {% for w in gwells %}{% if grouped_wells.append(w) %}{% endif %}{% endfor %}
+            {% endfor %}
+            <div id="group-well-picker" class="well-grid" style="margin-bottom:10px;">
+                {% for well in all_wells %}
+                {% set has_group = well in grouped_wells %}
+                <button type="button"
+                        class="group-source-well {% if not has_group %}well-no-group{% endif %}"
+                        data-well="{{ well }}"
+                        title="{{ well }}">{{ well }}</button>
+                {% endfor %}
+            </div>
+            <div id="group-list">
+                {% for gname, gwells in groups.items() %}
+                <div class="group-row" data-group="{{ gname }}">
+                    <input type="checkbox" class="group-include-cb" checked>
+                    <strong style="min-width:120px;">{{ gname }}</strong>
+                    <span style="font-size:0.8rem; color:#6b7280;">{{ gwells | join(', ') }}</span>
+                    <button type="button" class="move-btn" data-dir="up">▲</button>
+                    <button type="button" class="move-btn" data-dir="down">▼</button>
+                </div>
+                {% endfor %}
+            </div>
+        </details>
+    </div>
+
+    {# ── Options ── #}
+    <details open style="margin-bottom:12px;">
+        <summary style="cursor:pointer; display:inline-block; border:1px solid #cbd5e1; border-radius:8px; padding:6px 10px; background:#f8fafc; font-weight:600;">
+            Options
+        </summary>
+        <div style="display:flex; gap:16px; margin-top:8px; font-size:0.9rem;">
+            <label style="display:inline-flex; align-items:center; gap:6px;">
+                <input type="radio" name="norm_setting" value="raw" checked> Raw (fluorescence a.u.)
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:6px;">
+                <input type="radio" name="norm_setting" value="normalized"> Normalized (0–1)
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:6px;">
+                <input type="radio" name="norm_setting" value="both"> Both
+            </label>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+            <input type="text" id="custom-x-label" placeholder="x-axis title">
+            <input type="text" id="custom-y-label" placeholder="y-axis title">
+            <input type="text" id="custom-plot-title" placeholder="plot headline (applies to all)">
+        </div>
+    </details>
+
+    {# ── Hidden form submitted on generate ── #}
+    <form id="main-form" action="/plot/group_vs_group/render" method="post" target="_blank">
+        <input type="hidden" name="dataset_id" value="{{ dataset_id }}">
+        <input type="hidden" id="plots-json" name="plots_json" value="">
+        <input type="hidden" id="norm-setting-hidden" name="norm_setting" value="raw">
+        <input type="hidden" id="x-label-hidden" name="custom_x_label" value="">
+        <input type="hidden" id="y-label-hidden" name="custom_y_label" value="">
+        <input type="hidden" id="title-hidden" name="custom_plot_title" value="">
+    </form>
+
+    <button type="button" id="generate-btn" style="background:#7c3aed; margin-top:4px;">Generate plots</button>
+    <p style="margin-top:16px;"><a href="/">Back</a></p>
+
+    <script>
+        const GROUPS = {{ groups | tojson }};
+        const WELL_TO_GROUPS = {};
+        Object.entries(GROUPS).forEach(([g, ws]) => {
+            (ws || []).forEach(w => {
+                if (!WELL_TO_GROUPS[w]) WELL_TO_GROUPS[w] = [];
+                WELL_TO_GROUPS[w].push(g);
+            });
+        });
+
+        // ── State ────────────────────────────────────────────────────────────
+        // Each plot: { name, groups: [ordered group names] }
+        let gvgPlots = [{ name: "Plot 1", groups: Object.keys(GROUPS) }];
+        let gvgActiveIdx = 0;
+
+        const tabBar = document.getElementById("plot-tab-bar");
+        const nameInput = document.getElementById("plot-name-input");
+        const groupList = document.getElementById("group-list");
+        const groupWellPicker = document.getElementById("group-well-picker");
+        const summaryBox = document.getElementById("selection-summary");
+        const toggleInfoBtn = document.getElementById("toggle-info-btn");
+        const selectedGroupWells = new Set();
+
+        function escHtml(s) {
+            return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+        }
+
+        // ── Save / load per-plot state ────────────────────────────────────────
+        function saveCurrentState() {
+            const rows = Array.from(groupList.querySelectorAll(".group-row"));
+            const groups = rows
+                .filter(r => r.querySelector(".group-include-cb").checked)
+                .map(r => r.dataset.group);
+            gvgPlots[gvgActiveIdx].name = nameInput.value.trim() || ("Plot " + (gvgActiveIdx + 1));
+            gvgPlots[gvgActiveIdx].groups = groups;
+        }
+
+        function loadPlotState(idx) {
+            gvgActiveIdx = idx;
+            const plot = gvgPlots[idx];
+            nameInput.value = plot.name;
+            // Restore group order and checkboxes
+            const groupOrder = plot.groups;
+            const allGroups = Object.keys(GROUPS);
+            const unselected = allGroups.filter(g => !groupOrder.includes(g));
+            const orderedAll = [...groupOrder, ...unselected];
+            // Re-sort rows in groupList according to orderedAll
+            const rows = Array.from(groupList.querySelectorAll(".group-row"));
+            const rowByGroup = {};
+            rows.forEach(r => { rowByGroup[r.dataset.group] = r; });
+            orderedAll.forEach(g => {
+                const row = rowByGroup[g];
+                if (row) {
+                    groupList.appendChild(row);
+                    row.querySelector(".group-include-cb").checked = groupOrder.includes(g);
+                }
+            });
+            // Reset well picked highlights
+            selectedGroupWells.clear();
+            groupWellPicker.querySelectorAll(".group-source-well").forEach(btn => btn.classList.remove("well-picked"));
+            updateSummary();
+        }
+
+        // ── Tab rendering ─────────────────────────────────────────────────────
+        function renderTabs() {
+            let html = gvgPlots.map((p, i) => {
+                const active = i === gvgActiveIdx ? " active" : "";
+                const removeBtn = gvgPlots.length > 1
+                    ? `<span class="tab-remove" data-remove="${i}" title="Remove plot">×</span>` : "";
+                return `<button type="button" class="plot-tab-btn${active}" data-tab="${i}">${escHtml(p.name)}${removeBtn}</button>`;
+            }).join("");
+            if (gvgPlots.length < 10) {
+                html += `<button type="button" id="add-plot-btn">+ Add plot</button>`;
+            }
+            tabBar.innerHTML = html;
+        }
+
+        tabBar.addEventListener("click", function(e) {
+            const removeEl = e.target.closest("[data-remove]");
+            if (removeEl) {
+                e.stopPropagation();
+                const idx = parseInt(removeEl.dataset.remove);
+                saveCurrentState();
+                gvgPlots.splice(idx, 1);
+                gvgActiveIdx = Math.min(gvgActiveIdx, gvgPlots.length - 1);
+                renderTabs();
+                loadPlotState(gvgActiveIdx);
+                return;
+            }
+            const tabBtn = e.target.closest("[data-tab]");
+            if (tabBtn) {
+                const newIdx = parseInt(tabBtn.dataset.tab);
+                if (newIdx === gvgActiveIdx) return;
+                saveCurrentState();
+                renderTabs();  // re-render to update active
+                loadPlotState(newIdx);
+                renderTabs();
+                return;
+            }
+            if (e.target.id === "add-plot-btn") {
+                saveCurrentState();
+                const newIdx = gvgPlots.length;
+                gvgPlots.push({ name: "Plot " + (newIdx + 1), groups: Object.keys(GROUPS) });
+                gvgActiveIdx = newIdx;
+                renderTabs();
+                loadPlotState(newIdx);
+            }
+        });
+
+        // Sync name input → tab label in real time
+        nameInput.addEventListener("input", function() {
+            gvgPlots[gvgActiveIdx].name = this.value.trim() || ("Plot " + (gvgActiveIdx + 1));
+            renderTabs();
+        });
+
+        // ── Group list interactions ───────────────────────────────────────────
+        groupList.addEventListener("click", function(e) {
+            const btn = e.target.closest(".move-btn");
+            if (!btn) return;
+            const row = btn.closest(".group-row");
+            const dir = btn.dataset.dir;
+            if (dir === "up" && row.previousElementSibling) {
+                groupList.insertBefore(row, row.previousElementSibling);
+            } else if (dir === "down" && row.nextElementSibling) {
+                groupList.insertBefore(row.nextElementSibling, row);
+            }
+            updateSummary();
+        });
+        groupList.addEventListener("change", updateSummary);
+
+        // ── Well picker ───────────────────────────────────────────────────────
+        groupWellPicker.addEventListener("click", function(e) {
+            const btn = e.target.closest(".group-source-well[data-well]");
+            if (!btn) return;
+            const well = btn.dataset.well;
+            if (!WELL_TO_GROUPS[well]) return;
+            if (selectedGroupWells.has(well)) {
+                selectedGroupWells.delete(well);
+                btn.classList.remove("well-picked");
+            } else {
+                selectedGroupWells.add(well);
+                btn.classList.add("well-picked");
+            }
+            // Auto-select/deselect groups based on picked wells
+            const groupsFromWells = new Set();
+            selectedGroupWells.forEach(w => {
+                (WELL_TO_GROUPS[w] || []).forEach(g => groupsFromWells.add(g));
+            });
+            Array.from(groupList.querySelectorAll(".group-row")).forEach(row => {
+                row.querySelector(".group-include-cb").checked =
+                    groupsFromWells.size ? groupsFromWells.has(row.dataset.group) : true;
+            });
+            updateSummary();
+        });
+
+        // ── Summary ───────────────────────────────────────────────────────────
+        function updateSummary() {
+            const included = Array.from(groupList.querySelectorAll(".group-row"))
+                .filter(r => r.querySelector(".group-include-cb").checked)
+                .map(r => r.dataset.group);
+            summaryBox.innerHTML = `<strong>Plot ${gvgActiveIdx + 1} — ${escHtml(gvgPlots[gvgActiveIdx].name)}</strong>: ${included.join(", ") || "No groups selected"}`;
+        }
+
+        toggleInfoBtn.addEventListener("click", () => {
+            const visible = summaryBox.style.display === "block";
+            summaryBox.style.display = visible ? "none" : "block";
+            toggleInfoBtn.textContent = visible ? "Show Info" : "Hide Info";
+            if (!visible) updateSummary();
+        });
+
+        // ── Generate ──────────────────────────────────────────────────────────
+        document.getElementById("generate-btn").addEventListener("click", function() {
+            saveCurrentState();
+            const validPlots = gvgPlots.filter(p => p.groups.length > 0);
+            if (!validPlots.length) {
+                alert("Select at least one group for at least one plot.");
+                return;
+            }
+            const normSetting = document.querySelector('input[name="norm_setting"]:checked')?.value || "raw";
+            document.getElementById("plots-json").value = JSON.stringify(gvgPlots);
+            document.getElementById("norm-setting-hidden").value = normSetting;
+            document.getElementById("x-label-hidden").value = document.getElementById("custom-x-label").value.trim();
+            document.getElementById("y-label-hidden").value = document.getElementById("custom-y-label").value.trim();
+            document.getElementById("title-hidden").value = document.getElementById("custom-plot-title").value.trim();
+            document.getElementById("main-form").submit();
+        });
+
+        // ── Init ──────────────────────────────────────────────────────────────
+        renderTabs();
+        loadPlotState(0);
+    </script>
+</body>
+</html>

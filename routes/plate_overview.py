@@ -16,7 +16,7 @@ from data_utils import (
     parse_custom_plot_titles,
     build_curve_previews,
 )
-from plot_utils import generate_group_vs_control_plot
+from plot_utils import generate_group_vs_control_plot, generate_group_vs_group_plot, GVG_PALETTE
 
 plate_overview_bp = Blueprint("plate_overview_bp", __name__)
 
@@ -24,6 +24,7 @@ _plot_datasets      = _state._plot_datasets
 _stored_upload_sets = _state._stored_upload_sets
 _plot_images        = _state._plot_images
 _gvc_sessions       = _state._gvc_sessions
+_gvg_sessions       = _state._gvg_sessions
 
 
 # ── Plate overview ────────────────────────────────────────────────────────────
@@ -128,6 +129,7 @@ def group_vs_control_render():
 
     control_wells = request.form.getlist("control_well")
     excluded_wells = {w.strip() for w in request.form.getlist("exclude_well") if w.strip()}
+    control_wells = [w for w in control_wells if w not in excluded_wells]
     norm_setting = request.form.get("norm_setting", "raw")
     group_order_json = (request.form.get("group_order") or "").strip()
     custom_titles = parse_custom_plot_titles(request.form)
@@ -139,11 +141,8 @@ def group_vs_control_render():
 
     groups = dict(data.get("groups", {}))
     if group_order:
-        ordered = {g: groups[g] for g in group_order if g in groups}
-        for g in groups:
-            if g not in ordered:
-                ordered[g] = groups[g]
-        groups = ordered
+        groups = {g: groups[g] for g in group_order if g in groups}
+    
     if excluded_wells:
         groups = {
             g: [w for w in (ws if isinstance(ws, list) else []) if w not in excluded_wells]
@@ -293,3 +292,180 @@ def serve_plot_image(plot_id):
         as_attachment=False,
         download_name=entry["download_name"],
     )
+
+
+# ── Group vs group ─────────────────────────────────────────────────────────────
+
+@plate_overview_bp.route("/plot/group_vs_group/start", methods=["POST"])
+def group_vs_group_start():
+    dataset_id = (request.form.get("plate_session_id") or request.form.get("dataset_id") or "").strip()
+    data = _plot_datasets.get(dataset_id)
+    if not data:
+        return render_template("result.html", error="Session missing for group vs group. Please reload the plate overview.")
+    groups = data.get("groups", {}) if isinstance(data.get("groups", {}), dict) else {}
+    groups = {g: ws for g, ws in groups.items() if isinstance(ws, list) and ws}
+    if not groups:
+        return render_template("result.html", error="Group vs group requires at least one group in the current run.")
+
+    return render_template(
+        "group_vs_group_select.html",
+        dataset_id=dataset_id,
+        n_files=data["n_files"],
+        chromatic=data["chromatic"],
+        time_unit=data.get("time_unit", "hours"),
+        time_unit_suffix=unit_suffix(data.get("time_unit", "hours")),
+        all_wells=sorted(data["wells"].keys()),
+        groups=groups,
+    )
+
+
+@plate_overview_bp.route("/plot/group_vs_group/render", methods=["POST"])
+def group_vs_group_render():
+    dataset_id = request.form.get("dataset_id", "").strip()
+    data = _plot_datasets.get(dataset_id)
+    if not data:
+        return render_template("result.html", error="Session missing for group vs group.")
+
+    plots_json = (request.form.get("plots_json") or "[]").strip()
+    norm_setting = request.form.get("norm_setting", "raw")
+    custom_titles = parse_custom_plot_titles(request.form)
+
+    try:
+        plots_input = json.loads(plots_json)
+    except json.JSONDecodeError:
+        plots_input = []
+
+    if not plots_input:
+        return render_template("result.html", error="No plots defined.")
+
+    all_groups = {g: ws for g, ws in data.get("groups", {}).items() if isinstance(ws, list) and ws}
+
+    gvg_session_id = uuid.uuid4().hex
+    _gvg_sessions[gvg_session_id] = {
+        "dataset_id": dataset_id,
+        "time_sec": data["time_sec"],
+        "wells": data["wells"],
+        "time_unit": data.get("time_unit", "hours"),
+        "n_files": data["n_files"],
+        "chromatic": data["chromatic"],
+    }
+
+    results = []
+    for plot_item in plots_input[:10]:
+        plot_name = str(plot_item.get("name", "")).strip() or f"Plot {len(results) + 1}"
+        group_names = plot_item.get("groups", [])
+        groups_for_plot = {g: list(all_groups[g]) for g in group_names if g in all_groups}
+        if not groups_for_plot:
+            continue
+
+        colors = {g: GVG_PALETTE[i % len(GVG_PALETTE)] for i, g in enumerate(groups_for_plot)}
+
+        plots = []
+        try:
+            if norm_setting in ("raw", "both"):
+                pid = generate_group_vs_group_plot(
+                    data["time_sec"], data["wells"],
+                    groups=groups_for_plot, normalized=False,
+                    time_unit=data.get("time_unit", "hours"),
+                    colors=colors, custom_titles=custom_titles, plot_name=plot_name,
+                )
+                plots.append({"plot_id": pid, "normalized": False})
+            if norm_setting in ("normalized", "both"):
+                pid = generate_group_vs_group_plot(
+                    data["time_sec"], data["wells"],
+                    groups=groups_for_plot, normalized=True,
+                    time_unit=data.get("time_unit", "hours"),
+                    colors=colors, custom_titles=custom_titles, plot_name=plot_name,
+                )
+                plots.append({"plot_id": pid, "normalized": True})
+        except Exception:
+            pass
+
+        results.append({
+            "plot_name": plot_name,
+            "groups": groups_for_plot,
+            "colors": colors,
+            "plots": plots,
+        })
+
+    if not results:
+        return render_template("result.html", error="No plots could be generated. Check your group selections.")
+
+    return render_template(
+        "group_vs_group_result.html",
+        gvg_session_id=gvg_session_id,
+        norm_setting=norm_setting,
+        n_files=data["n_files"],
+        chromatic=data["chromatic"],
+        time_unit_suffix=unit_suffix(data.get("time_unit", "hours")),
+        results=results,
+    )
+
+
+@plate_overview_bp.route("/plot/group_vs_group/replot", methods=["POST"])
+def group_vs_group_replot():
+    gvg_session_id = (request.form.get("gvg_session_id") or "").strip()
+    gvg = _gvg_sessions.get(gvg_session_id)
+    if not gvg:
+        return jsonify({"error": "Session expired. Please regenerate plots."}), 404
+
+    plot_name = request.form.get("plot_name", "")
+    norm_setting = request.form.get("norm_setting", "raw")
+    groups_json = (request.form.get("groups_json") or "{}").strip()
+    colors_json = (request.form.get("colors_json") or "{}").strip()
+    custom_titles = parse_custom_plot_titles(request.form)
+
+    try:
+        groups = json.loads(groups_json)
+    except json.JSONDecodeError:
+        groups = {}
+
+    try:
+        colors = json.loads(colors_json)
+    except json.JSONDecodeError:
+        colors = {}
+
+    try:
+        x_from = parse_optional_float(request.form.get("x_from"))
+        x_to = parse_optional_float(request.form.get("x_to"))
+    except ValueError:
+        return jsonify({"error": "Invalid x range."}), 400
+
+    plots = []
+    try:
+        if norm_setting in ("raw", "both"):
+            pid = generate_group_vs_group_plot(
+                gvg["time_sec"], gvg["wells"],
+                groups=groups, normalized=False,
+                x_from=x_from, x_to=x_to, colors=colors,
+                time_unit=gvg.get("time_unit", "hours"),
+                custom_titles=custom_titles, plot_name=plot_name,
+            )
+            plots.append({"plot_id": pid, "normalized": False})
+        if norm_setting in ("normalized", "both"):
+            pid = generate_group_vs_group_plot(
+                gvg["time_sec"], gvg["wells"],
+                groups=groups, normalized=True,
+                x_from=x_from, x_to=x_to, colors=colors,
+                time_unit=gvg.get("time_unit", "hours"),
+                custom_titles=custom_titles, plot_name=plot_name,
+            )
+            plots.append({"plot_id": pid, "normalized": True})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    return jsonify({"plots": plots})
+
+
+@plate_overview_bp.route("/plot/group_vs_group/download_all", methods=["POST"])
+def group_vs_group_download_all():
+    plot_ids = request.form.getlist("plot_ids")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for pid in plot_ids:
+            entry = _plot_images.get(pid)
+            if entry:
+                zf.writestr(entry["download_name"], entry["bytes"])
+    buf.seek(0)
+    return send_file(buf, mimetype="application/zip", as_attachment=True,
+                     download_name="group_vs_group_plots.zip")
